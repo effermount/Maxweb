@@ -269,7 +269,7 @@ function bindIPC() {
   handle('updates:configure', 'settings', (repository, autoCheck) => {
     if (typeof autoCheck !== 'boolean' || typeof repository !== 'string') throw new Error('Неверные настройки обновлений.');
     if (updater.busy || updater.installing) throw new Error('Дождитесь завершения обновления.');
-    const updates = { repository: repository.trim() ? normalizeRepository(repository) : '', autoCheck };
+    const updates = { repository: repository.trim() ? normalizeRepository(repository) : '', autoCheck, userConfigured: true };
     store.set({ updates }); updater.reset(); broadcast(); return updates;
   });
   handle('updates:check', 'settings', () => updater.check());

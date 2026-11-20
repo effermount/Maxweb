@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createStore } = require('../src/store.cjs');
+const releaseConfig = require('../src/release-config.json');
 
 test('preferences persist across restarts without returning mutable internal state', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-store-'));
@@ -14,6 +15,17 @@ test('preferences persist across restarts without returning mutable internal sta
   assert.deepEqual(createStore(dir).get().window, { width: 900, height: 650, x: 20, y: 40 });
   store.get().window.width = 1;
   assert.equal(store.get().window.width, 900);
+});
+
+test('release default fills an old empty feed but preserves an explicitly cleared source', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-source-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'preferences.json');
+  fs.writeFileSync(file, JSON.stringify({ updates: { repository: '', autoCheck: true } }));
+  assert.equal(createStore(dir).get().updates.repository, releaseConfig.repository);
+  fs.writeFileSync(file, JSON.stringify({ updates: { repository: '', autoCheck: false, userConfigured: true } }));
+  assert.equal(createStore(dir).get().updates.repository, '');
+  assert.equal(createStore(dir).get().updates.autoCheck, false);
 });
 test('invalid saved settings cannot create an unusable window', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-store-'));

@@ -9,7 +9,7 @@ function createStore(directory) {
   let data = {
     notifications: true, window: { width: 1180, height: 820 },
     accounts: normalizeAccounts(), activeAccountId: 'default',
-    updates: { repository: releaseConfig.repository, autoCheck: true }
+    updates: { repository: releaseConfig.repository, autoCheck: true, userConfigured: false }
   };
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -17,8 +17,9 @@ function createStore(directory) {
     data.accounts = normalizeAccounts(saved.accounts);
     if (data.accounts.some(a => a.id === saved.activeAccountId)) data.activeAccountId = saved.activeAccountId;
     if (saved.updates && typeof saved.updates === 'object') {
-      if (typeof saved.updates.repository === 'string') data.updates.repository = saved.updates.repository;
+      if (typeof saved.updates.repository === 'string' && (saved.updates.repository.trim() || saved.updates.userConfigured === true)) data.updates.repository = saved.updates.repository;
       if (typeof saved.updates.autoCheck === 'boolean') data.updates.autoCheck = saved.updates.autoCheck;
+      if (saved.updates.userConfigured === true) data.updates.userConfigured = true;
     }
     if (saved.window && Number.isFinite(saved.window.width) && Number.isFinite(saved.window.height)) {
       data.window = { width: Math.max(800, Math.min(3840, saved.window.width)), height: Math.max(600, Math.min(2160, saved.window.height)) };
