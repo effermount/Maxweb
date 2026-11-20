@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { normalizeRepository, verifyManifest } = require('../src/update-core.cjs');
 const root = path.join(__dirname, '..');
@@ -12,11 +13,28 @@ for (const file of assets) if (!fs.existsSync(file)) throw new Error(`Снача
 const manifest = JSON.parse(fs.readFileSync(assets[2]));
 verifyManifest(manifest, fs.readFileSync(path.join(root, 'assets/release-public.pem')), `https://github.com/${repo}/releases/download/${tag}/latest.json`);
 if (manifest.version !== version) throw new Error('Версия выпуска не совпадает с package.json.');
-if (execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()) throw new Error('Перед публикацией сохраните изменения в Git-коммите.');
+const archive = fs.readFileSync(assets[1]);
+if (archive.length !== manifest.size || createHash('sha256').update(archive).digest('hex') !== manifest.sha256) throw new Error('Архив не совпадает с подписанным описанием выпуска. Выполните npm run dist заново.');
+const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+if (git(['status', '--porcelain'])) throw new Error('Перед публикацией сохраните изменения в Git-коммите.');
+const remote = git(['remote', 'get-url', 'origin']).replace(/^git@github\.com:/, 'https://github.com/').replace(/\.git$/, '');
+if (remote.toLowerCase() !== `https://github.com/${repo}`.toLowerCase()) throw new Error('Git remote origin не совпадает с репозиторием выпусков.');
 const gh = process.env.MAXWEB_GH || 'gh';
+const github = args => execFileSync(gh, args, { cwd: root, encoding: 'utf8' }).trim();
 execFileSync(gh, ['auth', 'status'], { stdio: 'inherit' });
 execFileSync('git', ['push', 'origin', 'main'], { cwd: root, stdio: 'inherit' });
-execFileSync('git', ['tag', '-a', tag, '-m', `Maxweb ${version}`], { cwd: root, stdio: 'inherit' });
+const head = git(['rev-parse', 'HEAD']);
+let tagged;
+try { tagged = git(['rev-parse', '--verify', `refs/tags/${tag}^{}`]); } catch {}
+if (tagged && tagged !== head) throw new Error('Этот тег уже указывает на другой коммит. Увеличьте версию.');
+if (!tagged) execFileSync('git', ['tag', '-a', tag, '-m', `Maxweb ${version}`], { cwd: root, stdio: 'inherit' });
 execFileSync('git', ['push', 'origin', tag], { cwd: root, stdio: 'inherit' });
-execFileSync(gh, ['release', 'create', tag, ...assets, '--repo', repo, '--verify-tag', '--title', `Maxweb ${version}`, '--notes-file', path.join(root, 'RELEASE_NOTES.md')], { cwd: root, stdio: 'inherit' });
+let release;
+try { release = JSON.parse(github(['api', `repos/${repo}/releases/tags/${tag}`])); }
+catch (error) { if (!String(error.stderr).includes('HTTP 404')) throw error; }
+if (release && !release.draft) throw new Error('Этот релиз уже опубликован и не будет изменён. Увеличьте версию.');
+if (!release) github(['release', 'create', tag, '--repo', repo, '--verify-tag', '--draft', '--title', `Maxweb ${version}`, '--notes-file', path.join(root, 'RELEASE_NOTES.md')]);
+// Upload into a draft: clients never observe a partially uploaded release.
+execFileSync(gh, ['release', 'upload', tag, ...assets, '--repo', repo, '--clobber'], { cwd: root, stdio: 'inherit' });
+github(['release', 'edit', tag, '--repo', repo, '--draft=false', '--latest']);
 console.log(`Published https://github.com/${repo}/releases/tag/${tag}`);
