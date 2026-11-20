@@ -25,7 +25,7 @@ if (location.origin === 'https://web.max.ru') {
   let followPath = '';
   const composerSelector = '[data-testid="composer"]';
   const outgoingSelector = '.message--isOut';
-  const editorFor = composer => composer?.querySelector('[contenteditable="true"], textarea, [role="textbox"]');
+  const editorFor = composer => composer?.querySelector('[contenteditable]:not([contenteditable="false"]), textarea, [role="textbox"]');
   const hasDraft = editor => !!editor && (typeof editor.value === 'string' ? editor.value.trim().length > 0 : editor.textContent.trim().length > 0);
   function scopeFor(composer) {
     for (let node = composer?.parentElement; node && node !== document.body; node = node.parentElement) {

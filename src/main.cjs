@@ -333,14 +333,14 @@ app.on('before-quit', () => {
 app.on('window-all-closed', () => {});
 const ready = hasLock ? app.whenReady().then(async () => {
   store = createStore(app.getPath('userData'));
-  // A dedicated, nonpersistent network session never sends MAX cookies to GitHub.
-  const updateNetwork = session.fromPartition('update-network');
+  // Node's HTTP stack has no Chromium cookie jar. Its Fetch implementation also
+  // exposes manual redirects; Electron's net.fetch cancels them instead.
   let notifiedVersion;
   updater = new Updater({
     version: APP_VERSION, directory: path.join(app.getPath('userData'), 'Updates'),
     publicKey: fs.readFileSync(path.join(__dirname, '../assets/release-public.pem')),
     getSettings: () => preferences().updates, packaged: app.isPackaged,
-    fetchImpl: (url, options) => updateNetwork.fetch(url, options),
+    fetchImpl: (url, options) => globalThis.fetch(url, options),
     beforeInstall: flushSessions, quit: () => app.quit(),
     onChange: state => {
       broadcast();

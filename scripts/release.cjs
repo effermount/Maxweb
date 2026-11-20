@@ -17,7 +17,7 @@ const manifest = {
   size: fs.statSync(archive).size,
   sha256: createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
   publishedAt: new Date().toISOString(),
-  notes: 'Несколько аккаунтов в одном окне с сохранением авторизаций. Обновления через GitHub Releases. Автопрокрутка к отправленному сообщению.'
+  notes: fs.readFileSync(path.join(root, 'RELEASE_NOTES.md'), 'utf8').slice(0, 12000)
 };
 manifest.signature = sign(null, canonicalManifest(manifest), fs.readFileSync(path.join(root, '.release/signing-private.pem'))).toString('base64');
 fs.writeFileSync(path.join(dist, 'latest.json'), JSON.stringify(manifest, null, 2) + '\n');

@@ -55,7 +55,7 @@ client.ready.then(async () => {
   await loaded(settings.webContents);
   assert.equal(BrowserWindow.getAllWindows().length, 1);
   const config = await settings.webContents.executeJavaScript('window.maxweb.get()');
-  assert.equal(config.notifications, true); assert.equal(config.arch, 'arm64'); assert.equal(config.version, '1.1.0');
+  assert.equal(config.notifications, true); assert.equal(config.arch, 'arm64'); assert.equal(config.version, require('../package.json').version);
   await settings.webContents.executeJavaScript('window.maxweb.notifications(false)');
   await Promise.all([loaded(primary), loaded(second)]);
   assert.equal(await primary.executeJavaScript('Notification.permission'), 'denied');
