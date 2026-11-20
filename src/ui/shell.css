@@ -1,0 +1,45 @@
+:root { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #2b253b; background: #f1eff7; color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+aside { width: 220px; height: 100vh; display: flex; flex-direction: column; padding: 22px 12px 12px; border-right: 1px solid #ded9e9; }
+header { display: flex; align-items: center; gap: 10px; padding: 0 8px 28px; }
+h1 { margin: 0 0 3px; font-size: 18px; letter-spacing: -.6px; }
+header span { color: #8b819a; font-size: 10px; }
+.section-heading { display: flex; justify-content: space-between; padding: 0 10px 10px; font-size: 9px; letter-spacing: 1px; color: #998da9; font-weight: 600; }
+.section-heading span:last-child { letter-spacing: 0; font-weight: 400; }
+nav { overflow-y: auto; min-height: 90px; flex: 1; padding-bottom: 12px; }
+.account-row { display: flex; align-items: center; position: relative; border-radius: 11px; margin-bottom: 5px; }
+.account-row.active { background: #e6ddfa; }
+button, input { font: inherit; }
+button { cursor: pointer; border: 0; background: none; color: inherit; }
+button:hover { background: #e9e3f3; }
+button:focus-visible, input:focus-visible { outline: 2px solid #9c77df; outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: default; }
+.account { display: flex; align-items: center; gap: 10px; width: calc(100% - 24px); min-height: 65px; border-radius: 11px; text-align: left; padding: 10px 7px; }
+.avatar { width: 34px; height: 34px; flex-shrink: 0; border-radius: 11px; background: #e1dae9; color: #806c99; display: grid; place-items: center; font-size: 14px; font-weight: 650; }
+.active .avatar { color: white; background: #9168d7; }
+.account-label { min-width: 0; flex: 1; }
+.name { font-size: 12px; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-status { display: block; font-size: 9px; color: #a094ad; margin-top: 5px; }
+.active .name { color: #643bac; }
+.rename { width: 23px; height: 30px; border-radius: 5px; color: #a391b5; font-size: 13px; padding: 0; }
+.badge { border-radius: 12px; background: #9466dc; color: white; font-size: 9px; font-weight: 700; padding: 3px 5px; position: absolute; left: 31px; top: 5px; border: 2px solid #f1eff7; }
+.add { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8762be; padding: 12px 9px; border-radius: 9px; text-align: left; }
+.add span { font-size: 20px; line-height: 16px; }
+.bottom { border-top: 1px solid #e2dcea; margin-top: 12px; padding-top: 12px; }
+.background-note { display: flex; align-items: center; gap: 6px; font-size: 9px; color: #a395ae; margin: 3px 8px 15px; }
+.dot { width: 5px; height: 5px; border-radius: 50%; background: #78aa8a; }
+.settings { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; border-radius: 9px; padding: 10px 8px; color: #8a789d; font-size: 10px; }
+.settings[aria-current="page"] { background: #e6ddfa; color: #643bac; }
+.settings span:first-child { font-size: 17px; }
+footer { display: flex; justify-content: space-between; font-size: 8px; color: #b5a8bf; padding: 14px 8px 0; }
+#update-alert { width: 100%; padding: 10px 8px; color: #7950b4; background: #e7ddf8; border-radius: 8px; margin-bottom: 8px; font-size: 10px; text-align: left; }
+#update-alert span { float: right; }
+[hidden] { display: none !important; }
+form { padding: 10px; border-radius: 10px; background: white; border: 1px solid #ded6e9; }
+form label { display: block; font-size: 10px; color: #8a789d; margin-bottom: 8px; }
+form input { width: 100%; border: 1px solid #ded6e9; border-radius: 6px; padding: 8px; font-size: 11px; background: #fcfafe; }
+form>div { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+form button { border-radius: 6px; padding: 7px; font-size: 10px; }
+form button.accent { background: #9466dc; color: white; }
+#error { font-size: 10px; line-height: 1.5; color: #ad4d65; padding: 0 9px; margin: 0; }

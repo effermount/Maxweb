@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Настройки Maxweb</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="settings.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><img src="../../assets/icon.png" alt="" width="64" height="64"><div><h1>Maxweb<span>ДЛЯ APPLE SILICON</span></h1><p>Ваш MAX. В своём окне.</p></div></header>
+    <div class="section-label">ОБНОВЛЕНИЯ ПРИЛОЖЕНИЯ</div>
+    <section class="card updates-card">
+      <div class="update-header"><div><strong id="update-title">Обновления Maxweb</strong><small id="update-message" role="status" aria-live="polite">Проверка новых версий через GitHub Releases</small></div><span id="update-version" class="pill"></span></div>
+      <progress id="update-progress" max="100" value="0" hidden aria-label="Загрузка обновления"></progress>
+      <p id="release-notes" hidden></p>
+      <div class="update-actions"><button id="update-check" class="secondary">Проверить обновления</button><button id="update-download" class="primary" hidden>Скачать обновление</button><button id="update-install" class="primary" hidden>Перезапустить и обновить</button></div>
+      <div class="divider"></div>
+      <div class="update-source"><label for="repository">Публичный репозиторий GitHub</label><div><input id="repository" placeholder="owner/Maxweb" spellcheck="false" autocomplete="off"><button id="update-save" class="secondary">Сохранить</button></div></div>
+      <label class="row"><span><strong>Проверять автоматически</strong><small>При запуске и каждые 6 часов</small></span><input type="checkbox" id="auto-update" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
+    </section>
+    <p class="hint">Файлы проверяются по цифровой подписи и SHA-256. Установка выполняется после нажатия кнопки, с перезапуском и сохранением аккаунтов.</p>
+    <div class="section-label">УВЕДОМЛЕНИЯ</div>
+    <section class="card">
+      <label class="row"><span><strong>Сообщения из MAX</strong><small>Разрешить системные уведомления</small></span><input type="checkbox" id="notifications" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
+      <div class="divider"></div>
+      <div class="row"><span><strong>Проверить доставку</strong><small>Отправить пробное уведомление</small></span><button id="test" class="secondary">Проверить</button></div>
+      <div class="divider"></div>
+      <button id="system" class="row link"><span>Настройки уведомлений macOS</span><span aria-hidden="true">↗</span></button>
+    </section>
+    <p class="hint">После входа включите уведомления в самом MAX. В macOS разрешите баннеры и звук для Maxweb. Режим «Фокусирование» может скрывать уведомления.</p>
+    <div class="section-label">РАБОТА ПРИЛОЖЕНИЯ</div>
+    <section class="card">
+      <label class="row"><span><strong>Запускать при входе в Mac</strong><small id="login-hint">Чтобы MAX всегда оставался на связи</small></span><input type="checkbox" id="login" role="switch"><span class="switch" aria-hidden="true"></span></label>
+      <div class="divider"></div>
+      <div class="row"><span><strong>Работать после закрытия окна</strong><small>Открыть снова можно из строки меню или Dock</small></span><span class="pill">Включено</span></div>
+    </section>
+    <p class="hint">Полный выход — ⌘Q. После выхода, во время сна Mac и без интернета новые сообщения не поступают.</p>
+    <div id="status" role="status" aria-live="polite"></div>
+    <footer><div><span id="version">Maxweb</span><small>Независимый клиент веб-версии MAX</small></div><button id="open" class="primary">Открыть MAX <span aria-hidden="true">→</span></button></footer>
+  </main>
+</body>
+</html>

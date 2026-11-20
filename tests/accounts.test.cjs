@@ -1,0 +1,31 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { createStore } = require('../src/store.cjs');
+const { newAccount, accountPartition, normalizeAccounts, accountName } = require('../src/accounts.cjs');
+test('v1.0 migrates to the original persistent partition without touching its files', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-migrate-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'Partitions/max'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'Partitions/max/Cookies'), 'original session');
+  fs.writeFileSync(path.join(dir, 'preferences.json'), JSON.stringify({ notifications: false, window: { width: 1100, height: 800 } }));
+  const store = createStore(dir);
+  assert.deepEqual(store.get().accounts, [{ id: 'default', name: 'Основной' }]);
+  assert.equal(accountPartition('default'), 'persist:max');
+  assert.equal(store.get().notifications, false);
+  const other = newAccount('  Рабочий  ');
+  assert.notEqual(accountPartition(other.id), accountPartition('default'));
+  store.set({ accounts: [...store.get().accounts, other], activeAccountId: other.id });
+  assert.equal(createStore(dir).get().activeAccountId, other.id);
+  assert.equal(fs.readFileSync(path.join(dir, 'Partitions/max/Cookies'), 'utf8'), 'original session');
+});
+test('account names and partitions reject malformed or shared identities', () => {
+  const account = newAccount('Личный');
+  assert.equal(normalizeAccounts([account, account, { id: '../max', name: 'Oops' }]).length, 2);
+  assert.throws(() => accountPartition('../max'));
+  assert.throws(() => accountName(' '));
+  assert.throws(() => accountName('x'.repeat(41)));
+  assert.throws(() => accountName('hello\nworld'));
+});

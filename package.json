@@ -1,0 +1,64 @@
+{
+  "name": "maxweb",
+  "productName": "Maxweb",
+  "version": "1.1.0",
+  "description": "Отдельное приложение для веб-версии MAX на Mac с Apple Silicon",
+  "private": true,
+  "main": "src/main.cjs",
+  "author": "Maxweb",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "test:runtime": "node scripts/test-runtime.cjs",
+    "test:installer": "node tests/install-e2e.cjs",
+    "icons": "swift scripts/icons.swift",
+    "prebuild": "node scripts/prepare-build.cjs",
+    "build": "electron-builder --mac dir --arm64",
+    "predist": "node scripts/prepare-build.cjs",
+    "dist": "electron-builder --mac dmg --arm64",
+    "postdist": "node scripts/release.cjs",
+    "release:files": "node scripts/release.cjs",
+    "publish:release": "node scripts/publish-release.cjs"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "local.maxweb.desktop",
+    "productName": "Maxweb",
+    "artifactName": "${productName}-${version}-apple-silicon.${ext}",
+    "directories": { "output": "dist", "buildResources": "assets" },
+    "files": ["src/**/*", "assets/*.png", "assets/release-public.pem", "package.json"],
+    "asar": true,
+    "electronDist": "node_modules/electron/dist",
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64"] }],
+      "category": "public.app-category.social-networking",
+      "icon": "assets/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "notarize": false,
+      "minimumSystemVersion": "13.0",
+      "extendInfo": {
+        "CFBundleDisplayName": "Maxweb",
+        "CFBundleDevelopmentRegion": "ru",
+        "CFBundleLocalizations": ["ru", "en"],
+        "NSCameraUsageDescription": "Камера используется для видеозвонков в MAX после вашего разрешения.",
+        "NSMicrophoneUsageDescription": "Микрофон используется для звонков и голосовых сообщений в MAX после вашего разрешения.",
+        "NSUserNotificationAlertStyle": "alert"
+      }
+    },
+    "dmg": {
+      "title": "Установка Maxweb",
+      "background": "assets/dmg-background.png",
+      "window": { "width": 600, "height": 420 },
+      "iconSize": 100,
+      "contents": [
+        { "x": 160, "y": 180, "type": "file" },
+        { "x": 440, "y": 180, "type": "link", "path": "/Applications" }
+      ]
+    }
+  }
+}
