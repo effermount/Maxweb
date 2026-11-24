@@ -146,6 +146,8 @@ function renderMaxZoom(percent) {
   selectedMaxZoom = percent;
   $('max-zoom').value = String(percent);
   $('max-zoom-reset').disabled = percent === 100;
+  $('max-zoom-feedback').textContent = `Масштаб MAX: ${percent}%. ⌘+ / ⌘− — изменить, ⌘0 — сбросить.`;
+  $('max-zoom-feedback').classList.remove('error');
 }
 async function saveMaxZoom(percent) {
   $('max-zoom').disabled = true; $('max-zoom-reset').disabled = true;
