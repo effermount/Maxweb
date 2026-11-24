@@ -13,7 +13,14 @@ function normalizeAccounts(value) {
   const accounts = [];
   for (const item of Array.isArray(value) ? value : []) {
     if (!item || !validAccountId(item.id) || seen.has(item.id)) continue;
-    try { accounts.push({ id: item.id, name: accountName(item.name) }); seen.add(item.id); } catch {}
+    try {
+      const account = { id: item.id, name: accountName(item.name) };
+      if (typeof item.customName === 'boolean') account.customName = item.customName;
+      if (typeof item.profileName === 'string') { try { account.profileName = accountName(item.profileName); } catch {} }
+      // Preserve names edited in earlier versions.
+      if (item.customName === undefined && !item.profileName && item.name !== 'Основной') account.customName = true;
+      accounts.push(account); seen.add(item.id);
+    } catch {}
   }
   // Reuse the original v1.0 partition; never move or recreate its login data.
   if (!seen.has('default')) accounts.unshift({ id: 'default', name: 'Основной' });
@@ -23,5 +30,5 @@ function accountPartition(id) {
   if (!validAccountId(id)) throw new Error('Неизвестный аккаунт.');
   return id === 'default' ? 'persist:max' : `persist:max-${id}`;
 }
-function newAccount(name) { return { id: randomUUID(), name: accountName(name) }; }
+function newAccount(name) { return { id: randomUUID(), name: accountName(name), customName: false }; }
 module.exports = { validAccountId, accountName, normalizeAccounts, accountPartition, newAccount };

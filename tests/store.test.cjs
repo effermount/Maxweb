@@ -37,3 +37,18 @@ test('invalid saved settings cannot create an unusable window', t => {
   assert.equal(createStore(dir).get().notifications, true);
   assert.deepEqual(createStore(dir).get().window, { width: 800, height: 2160 });
 });
+
+test('repository relocation migrates the old feed and retains update preferences across restarts', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-relocation-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'preferences.json');
+  for (const userConfigured of [false, true]) {
+    fs.writeFileSync(file, JSON.stringify({ updates: { repository: 'forkkrn-cmd/Maxweb', autoCheck: false, userConfigured } }));
+    const store = createStore(dir);
+    assert.deepEqual(store.get().updates, { repository: 'effermount/Maxweb', autoCheck: false, userConfigured });
+    store.set({ sidebarCollapsed: true });
+    assert.equal(createStore(dir).get().updates.repository, 'effermount/Maxweb');
+  }
+  fs.writeFileSync(file, JSON.stringify({ updates: { repository: 'custom/Maxweb', autoCheck: true, userConfigured: true } }));
+  assert.equal(createStore(dir).get().updates.repository, 'custom/Maxweb');
+});

@@ -13,20 +13,18 @@ func render(size: Int, tray: Bool = false) throws -> Data {
     context.scaleBy(x: CGFloat(size) / 1024, y: CGFloat(size) / 1024)
     if !tray {
         let tile = NSBezierPath(roundedRect: NSRect(x: 48, y: 48, width: 928, height: 928), xRadius: 218, yRadius: 218)
-        NSGradient(starting: NSColor(srgbRed: 0.64, green: 0.44, blue: 0.98, alpha: 1), ending: NSColor(srgbRed: 0.33, green: 0.20, blue: 0.75, alpha: 1))!.draw(in: tile, angle: -70)
+        NSGradient(starting: NSColor(srgbRed: 0.22, green: 0.28, blue: 0.62, alpha: 1), ending: NSColor(srgbRed: 0.07, green: 0.10, blue: 0.24, alpha: 1))!.draw(in: tile, angle: -70)
     }
-    let bubble = NSBezierPath(roundedRect: NSRect(x: 216, y: 275, width: 592, height: 490), xRadius: 160, yRadius: 160)
-    let tail = NSBezierPath()
-    tail.move(to: NSPoint(x: 260, y: 370)); tail.line(to: NSPoint(x: 224, y: 217)); tail.line(to: NSPoint(x: 422, y: 303)); tail.close()
-    (tray ? NSColor.black : NSColor.white).setFill()
-    bubble.fill(); tail.fill()
+    // A geometric M, without speech bubbles or dots resembling another messenger.
     let mark = NSBezierPath()
-    mark.move(to: NSPoint(x: 341, y: 558)); mark.line(to: NSPoint(x: 407, y: 421)); mark.line(to: NSPoint(x: 509, y: 579)); mark.line(to: NSPoint(x: 609, y: 421)); mark.line(to: NSPoint(x: 681, y: 558))
-    mark.lineWidth = 47; mark.lineCapStyle = .round; mark.lineJoinStyle = .round
+    let points = [NSPoint(x: 236, y: 300), NSPoint(x: 236, y: 724), NSPoint(x: 328, y: 724), NSPoint(x: 512, y: 486), NSPoint(x: 696, y: 724), NSPoint(x: 788, y: 724), NSPoint(x: 788, y: 300), NSPoint(x: 674, y: 300), NSPoint(x: 674, y: 526), NSPoint(x: 512, y: 326), NSPoint(x: 350, y: 526), NSPoint(x: 350, y: 300)]
+    mark.move(to: points[0]); for point in points.dropFirst() { mark.line(to: point) }; mark.close()
     if tray {
-        context.setBlendMode(.clear); mark.stroke(); context.setBlendMode(.normal)
+        NSColor.black.setFill(); mark.fill()
     } else {
-        NSColor(srgbRed: 0.49, green: 0.31, blue: 0.85, alpha: 1).setStroke(); mark.stroke()
+        NSColor.white.setFill(); mark.fill()
+        let accent = NSBezierPath(roundedRect: NSRect(x: 674, y: 214, width: 114, height: 36), xRadius: 18, yRadius: 18)
+        NSColor(srgbRed: 0.35, green: 0.88, blue: 0.84, alpha: 1).setFill(); accent.fill()
     }
     NSGraphicsContext.restoreGraphicsState()
     return bitmap.representation(using: .png, properties: [:])!

@@ -1,3 +1,6 @@
 {
-  "repository": "forkkrn-cmd/Maxweb"
+  "repository": "effermount/Maxweb",
+  "previousRepositories": [
+    "forkkrn-cmd/Maxweb"
+  ]
 }

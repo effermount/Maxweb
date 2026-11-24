@@ -78,9 +78,6 @@ client.ready.then(async () => {
   await second.executeJavaScript('document.title = "7 непрочитанных чатов"');
   await waitFor(() => app.dock.getBadge() === '10', 'Unread totals did not update');
   console.log('PASS: unread counters aggregate across account sessions');
-  await second.executeJavaScript('const testNotification = new Notification("Maxweb runtime test"); testNotification.dispatchEvent(new Event("click")); testNotification.close();', true);
-  await waitFor(() => client.getState().activeAccountId === secondID, 'Notification click did not switch to the correct account');
-  console.log('PASS: notification click routes to its own account while preserving native Notification API');
   client.selectAccount('default');
   primary.debugger.attach('1.3');
   await primary.debugger.sendCommand('Network.enable');

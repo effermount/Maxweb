@@ -1,21 +1,86 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
-// Keep Chromium's real Notification implementation and all MAX click handlers.
-// The only native message allowed here activates this sender's own account.
-window.addEventListener('message', event => {
-  if (event.source === window && event.origin === 'https://web.max.ru' && event.data?.type === 'maxweb:notification-click') ipcRenderer.send('account:notification-click');
-});
-contextBridge.executeInMainWorld({ func: () => {
-  if (location.origin !== 'https://web.max.ru' || typeof window.Notification !== 'function') return;
-  const NativeNotification = window.Notification;
-  window.Notification = new Proxy(NativeNotification, {
-    construct(target, args) {
-      const notification = Reflect.construct(target, args);
-      notification.addEventListener('click', () => window.postMessage({ type: 'maxweb:notification-click' }, location.origin));
-      return notification;
-    }
+if (location.origin === 'https://web.max.ru') {
+  contextBridge.exposeInMainWorld('__maxwebNotifications', {
+    send: request => ipcRenderer.send('account:notification', request),
+    onEvent: callback => ipcRenderer.on('account:notification-event', (_event, value) => callback(value))
   });
-} });
+  contextBridge.executeInMainWorld({ func: () => {
+    const NativeNotification = window.Notification;
+    if (typeof NativeNotification !== 'function') return;
+    const bridge = window.__maxwebNotifications;
+    const instances = new Map();
+    class DesktopNotification extends EventTarget {
+      constructor(title, options = {}) {
+        super();
+        if (!arguments.length) throw new TypeError('Notification title is required');
+        Object.defineProperty(this, 'id', { value: crypto.randomUUID() });
+        for (const [key, value] of Object.entries({ title: String(title), body: String(options.body || ''), data: options.data ?? null, tag: String(options.tag || ''), icon: String(options.icon || ''), silent: options.silent ?? null })) {
+          Object.defineProperty(this, key, { value, enumerable: true });
+        }
+        instances.set(this.id, this);
+        bridge.send({ type: 'show', id: this.id, title: this.title, body: this.body });
+      }
+      close() { bridge.send({ type: 'close', id: this.id }); }
+      static get permission() { return NativeNotification.permission; }
+      static get maxActions() { return NativeNotification.maxActions; }
+      static requestPermission(callback) { return NativeNotification.requestPermission(callback); }
+    }
+    for (const type of ['click', 'show', 'close', 'error']) {
+      Object.defineProperty(DesktopNotification.prototype, `on${type}`, {
+        get() { return this[`_${type}`] || null; },
+        set(callback) {
+          if (this[`_${type}`]) this.removeEventListener(type, this[`_${type}`]);
+          this[`_${type}`] = typeof callback === 'function' ? callback : null;
+          if (this[`_${type}`]) this.addEventListener(type, this[`_${type}`]);
+        }
+      });
+    }
+    bridge.onEvent(({ id, type }) => {
+      const notification = instances.get(id);
+      if (!notification || !['click', 'show', 'close', 'error'].includes(type)) return;
+      notification.dispatchEvent(new Event(type));
+      if (type === 'close' || type === 'error') instances.delete(id);
+    });
+    window.Notification = DesktopNotification;
+  } });
+  // MAX stores its own profile under viewer['']. Read only that record;
+  // do not scan contacts, messages, cookies or authentication records.
+  let readingProfile = false, lastProfileName = '';
+  async function syncProfile() {
+    if (readingProfile) return;
+    readingProfile = true;
+    try {
+      const databases = (await indexedDB.databases()).filter(db => /^max-db-\d+-\d+$/.test(db.name || ''));
+      const identities = new Set(databases.map(db => db.name.split('-').at(-1)));
+      if (identities.size !== 1) return;
+      const newest = databases.sort((a, b) => Number(b.name.split('-')[2]) - Number(a.name.split('-')[2]))[0];
+      if (!newest) return;
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open(newest.name);
+        request.onupgradeneeded = () => { request.transaction.abort(); reject(new Error('Missing MAX database')); };
+        request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+      });
+      try {
+        if (!db.objectStoreNames.contains('viewer')) return;
+        const record = await new Promise((resolve, reject) => {
+          const request = db.transaction('viewer', 'readonly').objectStore('viewer').get('');
+          request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+        });
+        const names = record?.model?.contact?.names;
+        const own = names?.find(name => name.type === 'ONEME') || names?.[0];
+        const name = [own?.firstName, own?.lastName].filter(value => typeof value === 'string' && value.trim()).join(' ').trim().slice(0, 40);
+        if (name && name !== lastProfileName && !/[\x00-\x1f\x7f]/.test(name)) { lastProfileName = name; ipcRenderer.send('account:profile', name); }
+      } finally { db.close(); }
+    } catch { /* MAX may change its schema; keep the saved account name. */ }
+    finally { readingProfile = false; }
+  }
+  void syncProfile(); setInterval(syncProfile, 5000);
+}
+let lastActivity = 0;
+for (const type of ['pointerdown', 'pointermove', 'wheel', 'keydown']) document.addEventListener(type, event => {
+  if (event.isTrusted && Date.now() - lastActivity > 1000) { lastActivity = Date.now(); ipcRenderer.send('app:activity'); }
+}, { capture: true, passive: true });
 
 // Follow a message only after a send gesture and a corresponding DOM update.
 // This inspects layout and draft emptiness, never stores or transmits message text.

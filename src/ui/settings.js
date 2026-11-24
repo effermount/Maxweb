@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let packaged = false;
+let packaged = false, banner, security;
 function status(message, error = false) {
   $('status').textContent = message;
   $('status').classList.toggle('error', error);
@@ -10,6 +10,7 @@ async function init() {
     const state = await window.maxweb.get();
     packaged = state.packaged;
     $('notifications').checked = state.notifications;
+    renderBanner(state.banner); renderSecurity(state.security);
     $('login').checked = state.openAtLogin;
     $('login').disabled = !state.packaged;
     if (!state.packaged) $('login-hint').textContent = 'Доступно после установки приложения';
@@ -76,4 +77,51 @@ $('update-check').addEventListener('click', () => updateAction(() => window.maxw
 $('update-download').addEventListener('click', () => updateAction(() => window.maxweb.updateDownload()));
 $('update-install').addEventListener('click', () => updateAction(() => window.maxweb.updateInstall()));
 window.maxweb.onUpdate(renderUpdate);
+
+
+const bannerIDs = { showAccount: 'banner-account', showSender: 'banner-sender', showText: 'banner-text', sound: 'banner-sound' };
+function renderBanner(value) {
+  banner = value;
+  for (const [key, id] of Object.entries(bannerIDs)) $(id).checked = banner[key];
+  $('banner-text').disabled = !banner.showSender;
+  $('preview-title').textContent = banner.showSender ? 'Отправитель MAX' : 'Maxweb';
+  $('preview-account').textContent = banner.showAccount ? 'Название вашего аккаунта' : '';
+  $('preview-body').textContent = banner.showSender && banner.showText ? 'Так будет выглядеть текст сообщения' : 'Новое сообщение в MAX';
+}
+for (const [key, id] of Object.entries(bannerIDs)) $(id).addEventListener('change', async () => {
+  const previous = banner;
+  for (const control of Object.values(bannerIDs)) $(control).disabled = true;
+  try { renderBanner(await window.maxweb.banner({ ...banner, [key]: $(id).checked })); status('Содержимое баннеров сохранено.'); }
+  catch (error) { renderBanner(previous); status(error.message, true); }
+  finally { for (const control of Object.values(bannerIDs)) $(control).disabled = false; $('banner-text').disabled = !banner.showSender; }
+});
+function renderSecurity(value) {
+  security = value;
+  $('security-state').textContent = value.enabled ? 'Защита включена · ⌘L для блокировки' : 'Блокировка выключена';
+  $('lock-now').hidden = !value.enabled;
+  $('current-pin-label').hidden = !value.enabled;
+  $('new-pin-label').textContent = value.enabled ? 'Новый PIN (пусто — оставить текущий)' : 'PIN-код: от 4 до 8 цифр';
+  $('security-save').textContent = value.enabled ? 'Сохранить защиту' : 'Включить блокировку';
+  $('security-disable').hidden = !value.enabled;
+  $('security-touch-id').checked = value.touchID && value.touchIDAvailable;
+  $('security-touch-id').disabled = !value.touchIDAvailable;
+  $('touch-id-hint').textContent = value.touchIDAvailable ? 'PIN остаётся запасным способом' : 'Touch ID не настроен или недоступен на этом Mac';
+  $('idle-seconds').value = String(value.idleSeconds);
+  for (const id of ['current-pin', 'new-pin', 'confirm-pin']) $(id).value = '';
+}
+async function saveSecurity(disable = false) {
+  const fields = [...$('security-form').querySelectorAll('input, select, button')];
+  for (const field of fields) field.disabled = true;
+  try {
+    const value = await window.maxweb.security({ currentPIN: $('current-pin').value, pin: $('new-pin').value, confirmPIN: $('confirm-pin').value,
+      touchID: $('security-touch-id').checked, idleSeconds: Number($('idle-seconds').value), disable });
+    renderSecurity(value); $('security-feedback').textContent = disable ? 'Блокировка выключена.' : 'Настройки защиты сохранены.'; $('security-feedback').classList.remove('error');
+  } catch (error) { $('security-feedback').textContent = error.message; $('security-feedback').classList.add('error'); }
+  finally { for (const field of fields) field.disabled = false; $('security-touch-id').disabled = !security.touchIDAvailable; }
+}
+$('security-form').addEventListener('submit', event => { event.preventDefault(); void saveSecurity(); });
+$('security-disable').addEventListener('click', () => saveSecurity(true));
+$('lock-now').addEventListener('click', () => window.maxweb.lock().catch(error => status(error.message, true)));
+
+window.maxweb.onLock(() => { for (const id of ['current-pin', 'new-pin', 'confirm-pin']) $(id).value = ''; });
 void init();

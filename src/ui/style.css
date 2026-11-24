@@ -302,3 +302,15 @@ footer small {
 .offline small {
   margin-top:22px;
 }
+
+.banner-preview { background: #f5f2fe; border: 1px solid #e8e1fa; border-radius: 12px; padding: 14px 16px; margin: 10px 18px; }
+.banner-preview p { margin: 8px 0 0; font-size: 12px; }
+#security-form { padding: 0 18px 18px; }
+#security-form > label:not(.row) { display: grid; gap: 8px; font-size: 11px; color: #736087; margin: 14px 0; }
+#security-form input[type="password"], #idle-seconds { position: static; opacity: 1; width: 100%; height: auto; padding: 10px 12px; border: 1px solid #ded6e9; border-radius: 8px; font: inherit; background: #fcfaff; }
+#security-form .row { padding: 16px 0; }
+.security-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+input:focus-visible, select:focus-visible { outline: 2px solid #b7a7fc; outline-offset: 2px; }
+
+#security-feedback { font-size: 11px; color: #736087; line-height: 1.5; margin: 12px 0 0; }
+#security-feedback.error { color: #b14c55; }

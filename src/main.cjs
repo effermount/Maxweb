@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, WebContentsView, Menu, Tray, nativeImage, session, shell, ipcMain, Notification, dialog, systemPreferences, powerMonitor, screen } = require('electron');
+const { app, BrowserWindow, WebContentsView, Menu, Tray, nativeImage, session, shell, ipcMain, Notification, dialog, systemPreferences, powerMonitor, screen, safeStorage } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -7,6 +7,8 @@ const { MAX_URL, isMaxURL, isExternalURL, mayUsePermission, unreadBadge } = requ
 const { createStore } = require('./store.cjs');
 const { newAccount, accountName, accountPartition } = require('./accounts.cjs');
 const { normalizeRepository } = require('./update-core.cjs');
+const { AppSecurity } = require('./security.cjs');
+const { normalizeBanner, bannerContent } = require('./notifications.cjs');
 const { Updater } = require('./updater.cjs');
 const APP_VERSION = require('../package.json').version;
 const SIDEBAR = 220;
@@ -20,18 +22,52 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('lang', 'ru');
 
-let mainWindow, settingsView, tray, store, updater;
+let mainWindow, settingsView, tray, store, updater, security;
 let quitting = false, switching = false, activePane = 'account';
-let autoCheckTimer, initialCheckTimer, cleanupTimer;
+let autoCheckTimer, initialCheckTimer, cleanupTimer, idleTimer;
 const runtimes = new Map();
 const activeNotifications = new Set();
+const accountNotifications = new Map();
+const sidebarWidth = () => preferences().sidebarCollapsed ? 72 : SIDEBAR;
 const preferences = () => store.get();
 const activeId = () => preferences().activeAccountId;
 const activeRuntime = () => runtimes.get(activeId());
 
+let pendingNotificationClick;
+function clearAccountNotifications(id) {
+  if (pendingNotificationClick?.id === id) pendingNotificationClick = null;
+  for (const [key, notification] of accountNotifications) if (key.startsWith(`${id}:`)) { notification.close(); accountNotifications.delete(key); }
+}
+function clearNotifications() {
+  for (const notification of accountNotifications.values()) notification.close();
+  accountNotifications.clear();
+  for (const notification of activeNotifications) notification.close();
+  activeNotifications.clear();
+}
+function securityChanged() {
+  if (security.locked) {
+    clearNotifications();
+    if (settingsView && !settingsView.webContents.isDestroyed()) settingsView.webContents.send('security:locked');
+    mainWindow?.setTitle('Maxweb — заблокировано');
+    mainWindow?.webContents.focus();
+  }
+  layout(); broadcast();
+  if (!security.locked) {
+    if (pendingNotificationClick) {
+      const pending = pendingNotificationClick; pendingNotificationClick = null;
+      selectAccount(pending.id);
+      if (!pending.sender.isDestroyed()) {
+        pending.sender.send('account:notification-event', { id: pending.notificationID, type: 'click' });
+        pending.sender.send('account:notification-event', { id: pending.notificationID, type: 'close' });
+      }
+    } else if (activePane === 'account') selectAccount(activeId(), false);
+  }
+}
 function shellState() {
   const state = preferences();
+  if (security?.locked) return { locked: true, security: security.snapshot(), version: APP_VERSION };
   return {
+    locked: false, security: security?.snapshot(), sidebarCollapsed: state.sidebarCollapsed,
     accounts: state.accounts.map(account => ({ ...account, active: account.id === state.activeAccountId && activePane === 'account', unread: runtimes.get(account.id)?.unread || '', status: runtimes.get(account.id)?.status || 'loading' })),
     pane: activePane, activeAccountId: state.activeAccountId,
     version: APP_VERSION, update: updater?.snapshot() || { status: 'idle' }
@@ -42,17 +78,18 @@ function broadcast() {
   if (settingsView && !settingsView.webContents.isDestroyed() && !settingsView.webContents.isLoading()) settingsView.webContents.send('updates:state', updater.snapshot());
   let total = 0;
   for (const runtime of runtimes.values()) total += runtime.unread === '99+' ? 100 : Number(runtime.unread || 0);
-  app.dock?.setBadge(total > 99 ? '99+' : total ? String(total) : '');
+  app.dock?.setBadge(security?.locked ? '' : total > 99 ? '99+' : total ? String(total) : '');
 }
 function layout() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const [width, height] = mainWindow.getContentSize();
-  const bounds = { x: SIDEBAR, y: 0, width: Math.max(1, width - SIDEBAR), height };
+  const sidebar = sidebarWidth();
+  const bounds = { x: sidebar, y: 0, width: Math.max(1, width - sidebar), height };
   for (const [id, runtime] of runtimes) {
     runtime.view.setBounds(bounds);
-    runtime.view.setVisible(activePane === 'account' && id === activeId());
+    runtime.view.setVisible(!security.locked && activePane === 'account' && id === activeId());
   }
-  if (settingsView) { settingsView.setBounds(bounds); settingsView.setVisible(activePane === 'settings'); }
+  if (settingsView) { settingsView.setBounds(bounds); settingsView.setVisible(!security.locked && activePane === 'settings'); }
 }
 function showWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -60,6 +97,7 @@ function showWindow() {
   mainWindow.show(); app.focus({ steal: true }); mainWindow.focus();
 }
 function selectAccount(id, focus = true) {
+  if (security.locked) { showWindow(); return shellState(); }
   if (!preferences().accounts.some(account => account.id === id)) throw new Error('Аккаунт не найден.');
   switching = true;
   try {
@@ -74,6 +112,7 @@ function selectAccount(id, focus = true) {
   return shellState();
 }
 function addAccount(name) {
+  security.requireUnlocked();
   const account = newAccount(name);
   store.set({ accounts: [...preferences().accounts, account] });
   createAccountView(account);
@@ -81,15 +120,16 @@ function addAccount(name) {
   return shellState();
 }
 function renameAccount(id, name) {
+  security.requireUnlocked();
   if (!preferences().accounts.some(a => a.id === id)) throw new Error('Аккаунт не найден.');
-  store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, name: accountName(name) } : a) });
+  store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, name: accountName(name), customName: true } : a) });
   if (id === activeId() && activePane === 'account') mainWindow.setTitle(`${accountName(name)} — MAX`);
   broadcast(); return shellState();
 }
 function external(url) { if (isExternalURL(url)) void shell.openExternal(url).catch(() => {}); }
 function secureNavigation(contents, id) {
   contents.setWindowOpenHandler(({ url }) => {
-    if (isMaxURL(url)) { selectAccount(id); void contents.loadURL(url).catch(() => {}); }
+    if (isMaxURL(url)) { if (!security.locked) { selectAccount(id); void contents.loadURL(url).catch(() => {}); } }
     else external(url);
     return { action: 'deny' };
   });
@@ -142,7 +182,9 @@ function createAccountView(account) {
   const runtime = { view, session: ses, unread: '', status: 'loading', retryTimer: null };
   runtimes.set(account.id, runtime);
   const contents = view.webContents;
+  contents.on('before-input-event', () => security.activity());
   secureNavigation(contents, account.id);
+  contents.on('did-start-navigation', details => { if (details.isMainFrame && !details.isSameDocument) clearAccountNotifications(account.id); });
   contents.on('page-title-updated', (_event, title) => { runtime.unread = unreadBadge(title); broadcast(); });
   contents.on('did-finish-load', () => {
     runtime.status = contents.getURL() === offlineURL ? 'offline' : 'ready'; broadcast();
@@ -156,6 +198,7 @@ function createAccountView(account) {
     }).catch(() => {});
   });
   contents.on('render-process-gone', () => {
+    clearAccountNotifications(account.id);
     if (!quitting) { clearTimeout(runtime.retryTimer); runtime.retryTimer = setTimeout(() => loadMax(account.id), 1500); }
   });
   void loadMax(account.id);
@@ -166,10 +209,12 @@ function localPreferences(preload) {
   return { preload: path.join(__dirname, preload), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true };
 }
 function showSettings() {
+  if (security.locked) { showWindow(); return; }
   if (!settingsView) {
     settingsView = new WebContentsView({ webPreferences: localPreferences('settings-preload.cjs') });
     settingsView.setBackgroundColor('#f6f5fa');
     mainWindow.contentView.addChildView(settingsView);
+    settingsView.webContents.on('before-input-event', () => security.activity());
     settingsView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     settingsView.webContents.on('will-navigate', event => event.preventDefault());
     void settingsView.webContents.loadURL(settingsURL);
@@ -189,6 +234,7 @@ function createMainWindow() {
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', event => event.preventDefault());
   mainWindow.webContents.on('did-finish-load', broadcast);
+  mainWindow.webContents.on('before-input-event', () => security.activity());
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('close', event => { if (!quitting) { event.preventDefault(); mainWindow.hide(); } });
   let boundsTimer;
@@ -213,9 +259,10 @@ function createMainWindow() {
 }
 function testNotification() {
   return new Promise((resolve, reject) => {
+    if (!preferences().notifications) return reject(new Error('Сначала включите уведомления в настройках Maxweb.'));
     if (!Notification.isSupported()) return reject(new Error('Уведомления недоступны в этой системе.'));
     const account = preferences().accounts.find(a => a.id === activeId());
-    const notification = new Notification({ title: 'Maxweb', subtitle: account.name, body: 'Пробное уведомление. Нажмите, чтобы открыть этот аккаунт.', sound: 'default' });
+    const notification = new Notification({ ...bannerContent(account, 'Отправитель MAX', 'Так будет выглядеть текст нового сообщения.', preferences().banner, security.locked) });
     activeNotifications.add(notification);
     let settled = false;
     const timeout = setTimeout(() => { if (!settled) { settled = true; resolve({ delivered: false }); } }, 5000);
@@ -233,31 +280,88 @@ function trusted(contents, url, event) {
   return contents && !contents.isDestroyed() && event.sender === contents && event.senderFrame === contents.mainFrame && event.senderFrame.url === url;
 }
 function bindIPC() {
-  ipcMain.on('account:notification-click', event => {
+  const senderAccount = event => {
     if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame || !isMaxURL(event.senderFrame.url)) return;
-    for (const [id, runtime] of runtimes) {
-      if (runtime.view.webContents === event.sender) { selectAccount(id); return; }
-    }
+    for (const [id, runtime] of runtimes) if (runtime.view.webContents === event.sender) return id;
+  };
+  ipcMain.on('app:activity', event => {
+    if (senderAccount(event) || trusted(mainWindow?.webContents, shellURL, event) || trusted(settingsView?.webContents, settingsURL, event)) security.activity();
+  });
+  ipcMain.on('account:profile', (event, name) => {
+    const id = senderAccount(event);
+    if (!id) return;
+    try { name = accountName(name); } catch { return; }
+    const account = preferences().accounts.find(a => a.id === id);
+    if (!account || account.profileName === name) return;
+    store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, profileName: name, ...(!a.customName ? { name } : {}) } : a) });
+    if (id === activeId() && !security.locked && activePane === 'account') mainWindow.setTitle(`${preferences().accounts.find(a => a.id === id).name} — MAX`);
+    broadcast();
+  });
+  ipcMain.on('account:notification', (event, request) => {
+    const id = senderAccount(event);
+    if (!id || !request || typeof request.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(request.id)) return;
+    const key = `${id}:${request.id}`;
+    if (request.type === 'close') { accountNotifications.get(key)?.close(); accountNotifications.delete(key); return; }
+    if (request.type !== 'show' || accountNotifications.has(key)) return;
+    const reply = type => { if (!event.sender.isDestroyed()) event.sender.send('account:notification-event', { id: request.id, type }); };
+    if (!preferences().notifications || !Notification.isSupported() || accountNotifications.size >= 100) { reply('error'); return; }
+    const account = preferences().accounts.find(a => a.id === id);
+    if (typeof request.title !== 'string' || typeof request.body !== 'string') return;
+    const notification = new Notification(bannerContent(account, request.title, request.body, preferences().banner, security.locked));
+    accountNotifications.set(key, notification);
+    notification.on('show', () => reply('show'));
+    notification.on('click', () => {
+      if (security.locked) {
+        // Delay MAX's click handler until authenticated, so links never bypass the lock.
+        pendingNotificationClick = { id, sender: event.sender, notificationID: request.id };
+        showWindow();
+      } else { selectAccount(id); reply('click'); }
+      notification.close();
+    });
+    notification.on('close', () => { accountNotifications.delete(key); if (pendingNotificationClick?.notificationID !== request.id || pendingNotificationClick?.id !== id) reply('close'); });
+    notification.on('failed', () => { accountNotifications.delete(key); reply('error'); });
+    notification.show();
   });
   const handle = (channel, audience, handler) => ipcMain.handle(channel, async (event, ...args) => {
     const allowed = audience === 'shell'
       ? trusted(mainWindow?.webContents, shellURL, event)
       : trusted(settingsView?.webContents, settingsURL, event);
     if (!allowed) throw new Error('Недоверенный источник запроса.');
+    if (!['shell:get', 'security:unlock', 'security:touch-id', 'security:lock'].includes(channel)) security.requireUnlocked();
     return handler(...args);
   });
   handle('shell:get', 'shell', shellState);
+  handle('shell:collapse', 'shell', collapsed => {
+    if (typeof collapsed !== 'boolean') throw new Error('Неверное значение.');
+    store.set({ sidebarCollapsed: collapsed }); layout(); broadcast(); return shellState();
+  });
+  handle('security:lock', 'shell', () => { security.lock(); return shellState(); });
+  handle('security:unlock', 'shell', pin => security.unlock(pin));
+  handle('security:touch-id', 'shell', () => security.unlock(undefined, true));
+  handle('accounts:profile-name', 'shell', id => {
+    const account = preferences().accounts.find(a => a.id === id);
+    if (!account) throw new Error('Аккаунт не найден.');
+    store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, customName: false, name: a.profileName || a.name } : a) });
+    broadcast(); return shellState();
+  });
   handle('accounts:select', 'shell', selectAccount);
   handle('accounts:add', 'shell', addAccount);
   handle('accounts:rename', 'shell', renameAccount);
   handle('shell:settings', 'shell', () => { showSettings(); });
-  handle('settings:get', 'settings', () => ({ notifications: preferences().notifications, openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
+  handle('settings:get', 'settings', () => ({ notifications: preferences().notifications, banner: preferences().banner, security: security.snapshot(), openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
   handle('settings:notifications', 'settings', enabled => {
     if (typeof enabled !== 'boolean') throw new Error('Неверное значение.');
     store.set({ notifications: enabled });
+    if (!enabled) clearNotifications();
     for (const { view } of runtimes.values()) if (isMaxURL(view.webContents.getURL())) view.webContents.reload();
     return enabled;
   });
+  handle('settings:banner', 'settings', value => {
+    if (!value || Object.keys(normalizeBanner()).some(key => typeof value[key] !== 'boolean')) throw new Error('Неверные настройки баннера.');
+    store.set({ banner: normalizeBanner(value) }); clearNotifications(); return preferences().banner;
+  });
+  handle('settings:security', 'settings', value => security.configure(value || {}));
+  handle('settings:lock', 'settings', () => security.lock());
   handle('settings:login', 'settings', enabled => {
     if (!app.isPackaged || typeof enabled !== 'boolean') throw new Error('Автозапуск доступен в установленном приложении.');
     app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: false });
@@ -286,6 +390,7 @@ function createMenu() {
     { label: 'Maxweb', submenu: [
       { label: 'О Maxweb', click: () => dialog.showMessageBox({ type: 'info', message: `Maxweb ${APP_VERSION}`, detail: 'Независимый клиент веб-версии MAX для Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
       { label: 'Проверить обновления…', click: checkUpdates },
+      { label: 'Заблокировать Maxweb', accelerator: 'CmdOrCtrl+L', click: () => security.lock() },
       { label: 'Настройки…', accelerator: 'CmdOrCtrl+,', click: showSettings },
       { type: 'separator' }, { role: 'services', label: 'Службы' },
       { type: 'separator' }, { role: 'hide', label: 'Скрыть Maxweb' }, { role: 'hideOthers', label: 'Скрыть остальные' }, { role: 'unhide', label: 'Показать все' },
@@ -299,6 +404,7 @@ function createMenu() {
       { label: 'Предыдущий аккаунт', accelerator: 'Ctrl+Shift+Tab', click: () => cycleAccount(-1) }
     ] },
     { label: 'Вид', submenu: [
+      { label: 'Свернуть / развернуть панель', accelerator: 'CmdOrCtrl+Shift+S', click: () => { if (security.locked) return; store.set({ sidebarCollapsed: !preferences().sidebarCollapsed }); layout(); broadcast(); } },
       { label: 'Перезагрузить MAX', accelerator: 'CmdOrCtrl+R', click: () => loadMax() },
       { type: 'separator' }, { role: 'resetZoom', label: 'Фактический размер' }, { role: 'zoomIn', label: 'Увеличить' }, { role: 'zoomOut', label: 'Уменьшить' },
       { type: 'separator' }, { role: 'togglefullscreen', label: 'На весь экран' }
@@ -327,12 +433,23 @@ if (!hasLock) app.quit();
 app.on('second-instance', showWindow);
 app.on('activate', () => { if (app.isReady() && mainWindow) showWindow(); });
 app.on('before-quit', () => {
-  quitting = true; clearTimeout(initialCheckTimer); clearTimeout(cleanupTimer); clearInterval(autoCheckTimer);
+  quitting = true; clearTimeout(initialCheckTimer); clearTimeout(cleanupTimer); clearInterval(autoCheckTimer); clearInterval(idleTimer);
   for (const runtime of runtimes.values()) clearTimeout(runtime.retryTimer);
 });
 app.on('window-all-closed', () => {});
 const ready = hasLock ? app.whenReady().then(async () => {
   store = createStore(app.getPath('userData'));
+  security = new AppSecurity({
+    store,
+    encrypt: async value => {
+      if (!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('Связка ключей macOS недоступна. Повторите позже.');
+      return (await safeStorage.encryptStringAsync(value)).toString('base64');
+    },
+    decrypt: async value => (await safeStorage.decryptStringAsync(Buffer.from(value, 'base64'))).result,
+    canTouchID: () => process.platform === 'darwin' && systemPreferences.canPromptTouchID(),
+    promptTouchID: () => systemPreferences.promptTouchID('разблокировать Maxweb'),
+    onChange: securityChanged
+  });
   // Node's HTTP stack has no Chromium cookie jar. Its Fetch implementation also
   // exposes manual redirects; Electron's net.fetch cancels them instead.
   let notifiedVersion;
@@ -356,6 +473,9 @@ const ready = hasLock ? app.whenReady().then(async () => {
     }
   });
   bindIPC(); createMenu(); createMainWindow();
+  idleTimer = setInterval(() => security.checkIdle(), 1000);
+  powerMonitor.on('suspend', () => security.lock());
+  powerMonitor.on('lock-screen', () => security.lock());
   const autoCheck = () => { if (preferences().updates.autoCheck && preferences().updates.repository) void updater.check().catch(() => {}); };
   if (app.isPackaged) {
     initialCheckTimer = setTimeout(autoCheck, 15000);
@@ -372,5 +492,6 @@ module.exports = {
   ready, showWindow, showSettings, loadMax, testNotification, addAccount, renameAccount, selectAccount, flushSessions,
   getMainWindow: () => mainWindow, getSession: (id = activeId()) => runtimes.get(id)?.session,
   getAccountContents: (id = activeId()) => runtimes.get(id)?.view.webContents,
-  getState: shellState, getUpdater: () => updater
+  getAccountNotifications: () => accountNotifications,
+  getState: shellState, getSecurity: () => security, getUpdater: () => updater
 };

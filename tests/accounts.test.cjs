@@ -29,3 +29,11 @@ test('account names and partitions reject malformed or shared identities', () =>
   assert.throws(() => accountName('x'.repeat(41)));
   assert.throws(() => accountName('hello\nworld'));
 });
+
+test('automatic names survive repeated normalization while legacy custom names retain priority', () => {
+  const account = newAccount('Рабочий');
+  const normalized = normalizeAccounts(normalizeAccounts([account]));
+  assert.equal(normalized.find(a => a.id === account.id).customName, false);
+  assert.equal(normalizeAccounts([{ id: account.id, name: 'Моё имя' }]).find(a => a.id === account.id).customName, true);
+  assert.equal(normalizeAccounts([{ ...account, profileName: '\n' }]).find(a => a.id === account.id).name, 'Рабочий');
+});

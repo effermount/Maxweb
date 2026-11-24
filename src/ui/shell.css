@@ -43,3 +43,34 @@ form>div { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; 
 form button { border-radius: 6px; padding: 7px; font-size: 10px; }
 form button.accent { background: #9466dc; color: white; }
 #error { font-size: 10px; line-height: 1.5; color: #ad4d65; padding: 0 9px; margin: 0; }
+
+aside { position: relative; padding-top: 52px; }
+.collapse { position: absolute; right: 12px; top: 12px; width: 30px; height: 28px; border-radius: 7px; font-size: 20px; color: #806c99; }
+.collapsed aside { width: 72px; padding: 52px 10px 12px; }
+.collapsed header { padding: 0 8px 18px; }
+.collapsed header img { width: 32px; height: 32px; }
+.collapsed header div, .collapsed .section-heading, .collapsed .account-label, .collapsed .rename,
+.collapsed .background-note, .collapsed footer, .collapsed .settings span:nth-child(2), .collapsed .add-label, .collapsed #update-alert { display: none; }
+.collapsed .account { width: 100%; padding: 9px; min-height: 52px; }
+.collapsed .badge { left: 25px; top: 0; }
+.collapsed .add, .collapsed .settings { justify-content: center; padding: 12px 0; }
+.collapsed .settings span:first-child { font-size: 22px; }
+.collapsed nav { min-height: 52px; }
+.loading aside, .locked aside { display: none; }
+#profile-name { font-size: 10px; text-align: left; color: #7950b4; padding: 8px 0 0; overflow-wrap: anywhere; }
+#lock-screen { height: 100vh; display: grid; place-items: center; background: #f1eff7; }
+.lock-card { width: 340px; text-align: center; }
+.lock-card h2 { font-size: 22px; margin: 20px 0 10px; }
+.lock-card p { font-size: 12px; color: #8a789d; }
+#unlock-form { display: grid; gap: 14px; margin-top: 24px; padding: 24px; }
+#unlock-form label { margin: 0; }
+#unlock-pin { font-size: 24px; letter-spacing: 9px; text-align: center; }
+#unlock-form button { font-size: 13px; padding: 12px; }
+#touch-id { background: #e6ddfa; border-radius: 8px; padding: 12px; margin-top: 14px; }
+#unlock-error { min-height: 36px; color: #ad4d65; }
+
+.avatar.tone-1 { background: #d8e5f5; color: #4d79aa; }
+.avatar.tone-2 { background: #d7eae2; color: #4b8c74; }
+.avatar.tone-3 { background: #f0dfd7; color: #b37858; }
+.avatar.tone-4 { background: #eadbf0; color: #9b68a9; }
+.active .avatar { color: white; background: #9168d7; }

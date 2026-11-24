@@ -3,23 +3,33 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Maxweb</title><link rel="stylesheet" href="shell.css"><script src="shell.js" defer></script>
-</head><body>
+</head><body class="loading">
   <aside aria-label="Аккаунты MAX">
+    <button id="collapse" class="collapse" title="Свернуть панель" aria-label="Свернуть панель" aria-expanded="true">◧</button>
     <header><img src="../../assets/icon.png" alt="" width="35" height="35"><div><h1>Maxweb</h1><span>Все ваши аккаунты</span></div></header>
     <div class="section-heading"><span>АККАУНТЫ</span><span title="Переключение аккаунтов">⌘1–9</span></div>
     <nav id="accounts" aria-label="Переключение аккаунтов"></nav>
     <form id="account-form" hidden>
       <label for="account-name" id="form-title">Новый аккаунт</label>
       <input id="account-name" type="text" maxlength="40" placeholder="Например, Рабочий" autocomplete="off" required>
+      <button id="profile-name" type="button" hidden>Использовать имя MAX</button>
       <div><button id="cancel" type="button">Отмена</button><button class="accent" type="submit" id="save">Добавить</button></div>
     </form>
     <p id="error" role="status" aria-live="polite"></p>
-    <button id="add" class="add"><span aria-hidden="true">＋</span> Добавить аккаунт</button>
+    <button id="add" class="add" title="Добавить аккаунт" aria-label="Добавить аккаунт"><span aria-hidden="true">＋</span><span class="add-label">Добавить аккаунт</span></button>
     <div class="bottom">
       <p class="background-note"><span class="dot"></span>Аккаунты работают в фоне</p>
       <button id="update-alert" hidden>Доступно обновление <span aria-hidden="true">↗</span></button>
-      <button id="settings" class="settings"><span aria-hidden="true">⚙</span><span>Настройки и обновления</span></button>
+      <button id="lock" class="settings" title="Заблокировать Maxweb · ⌘L" hidden><span aria-hidden="true">▣</span><span>Заблокировать</span></button>
+      <button id="settings" class="settings" title="Настройки и обновления" aria-label="Настройки и обновления"><span aria-hidden="true">⚙</span><span>Настройки и обновления</span></button>
       <footer><span id="version">Maxweb</span><span>Apple Silicon</span></footer>
     </div>
   </aside>
+<main id="lock-screen" hidden aria-labelledby="lock-title">
+    <div class="lock-card"><img src="../../assets/icon.png" alt="" width="76" height="76">
+      <h2 id="lock-title">Maxweb заблокирован</h2><p>Введите PIN, чтобы открыть аккаунты</p>
+      <form id="unlock-form"><label for="unlock-pin">PIN-код</label><input id="unlock-pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" required><button id="unlock" class="accent" type="submit">Разблокировать</button></form>
+      <button id="touch-id" hidden>Разблокировать с Touch ID</button><p id="unlock-error" role="status" aria-live="polite"></p>
+    </div>
+  </main>
 </body></html>

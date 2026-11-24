@@ -26,11 +26,30 @@
     <section class="card">
       <label class="row"><span><strong>Сообщения из MAX</strong><small>Разрешить системные уведомления</small></span><input type="checkbox" id="notifications" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
       <div class="divider"></div>
+      <label class="row"><span><strong>Название аккаунта</strong><small>Показывать, в какой аккаунт пришло сообщение</small></span><input type="checkbox" id="banner-account" role="switch"><span class="switch" aria-hidden="true"></span></label>
+      <label class="row"><span><strong>Отправитель или чат</strong><small>При отключении текст тоже скрывается</small></span><input type="checkbox" id="banner-sender" role="switch"><span class="switch" aria-hidden="true"></span></label>
+      <label class="row"><span><strong>Текст сообщения</strong><small>Показывать доступный предпросмотр из MAX</small></span><input type="checkbox" id="banner-text" role="switch"><span class="switch" aria-hidden="true"></span></label>
+      <label class="row"><span><strong>Звук баннера</strong><small>Системный звук уведомлений macOS</small></span><input type="checkbox" id="banner-sound" role="switch"><span class="switch" aria-hidden="true"></span></label>
+      <div class="banner-preview" aria-label="Пример баннера"><strong id="preview-title"></strong><small id="preview-account"></small><p id="preview-body"></p></div>
       <div class="row"><span><strong>Проверить доставку</strong><small>Отправить пробное уведомление</small></span><button id="test" class="secondary">Проверить</button></div>
       <div class="divider"></div>
       <button id="system" class="row link"><span>Настройки уведомлений macOS</span><span aria-hidden="true">↗</span></button>
     </section>
     <p class="hint">После входа включите уведомления в самом MAX. В macOS разрешите баннеры и звук для Maxweb. Режим «Фокусирование» может скрывать уведомления.</p>
+    <div class="section-label">БЛОКИРОВКА ПРИЛОЖЕНИЯ</div>
+    <section class="card security-card">
+      <div class="row"><span><strong>PIN и Touch ID</strong><small id="security-state">Блокировка выключена</small></span><button id="lock-now" class="secondary" hidden>Заблокировать</button></div>
+      <form id="security-form">
+        <label id="current-pin-label" hidden>Текущий PIN<input id="current-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+        <label><span id="new-pin-label">PIN-код: от 4 до 8 цифр</span><input id="new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+        <label>Повторите новый PIN<input id="confirm-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+        <label class="row"><span><strong>Разблокировка с Touch ID</strong><small id="touch-id-hint">PIN остаётся запасным способом</small></span><input type="checkbox" id="security-touch-id" role="switch"><span class="switch" aria-hidden="true"></span></label>
+        <label class="idle-label">Автоблокировка без действий в приложении<select id="idle-seconds"><option value="60">Через 1 минуту</option><option value="300">Через 5 минут</option><option value="900">Через 15 минут</option><option value="1800">Через 30 минут</option><option value="3600">Через 1 час</option><option value="0">Отключена</option></select></label>
+        <div class="security-actions"><button id="security-save" class="primary" type="submit">Включить блокировку</button><button id="security-disable" class="secondary" type="button" hidden>Выключить</button></div>
+        <p id="security-feedback" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <p class="hint">При включённой защите PIN запрашивается при запуске, после сна и блокировки Mac. Пока приложение заблокировано, баннеры скрывают аккаунт, отправителя и текст. Запомните PIN: восстановить его внутри приложения нельзя. Блокировка закрывает доступ к окну; данные сессий MAX остаются в профиле macOS.</p>
     <div class="section-label">РАБОТА ПРИЛОЖЕНИЯ</div>
     <section class="card">
       <label class="row"><span><strong>Запускать при входе в Mac</strong><small id="login-hint">Чтобы MAX всегда оставался на связи</small></span><input type="checkbox" id="login" role="switch"><span class="switch" aria-hidden="true"></span></label>
