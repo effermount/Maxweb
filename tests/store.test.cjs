@@ -52,3 +52,15 @@ test('repository relocation migrates the old feed and retains update preferences
   fs.writeFileSync(file, JSON.stringify({ updates: { repository: 'custom/Maxweb', autoCheck: true, userConfigured: true } }));
   assert.equal(createStore(dir).get().updates.repository, 'custom/Maxweb');
 });
+
+test('theme defaults to system, persists overrides and rejects invalid saved values', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-theme-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  assert.equal(createStore(dir).get().theme, 'system');
+  for (const theme of ['dark', 'light', 'system']) {
+    createStore(dir).set({ theme });
+    assert.equal(createStore(dir).get().theme, theme);
+  }
+  fs.writeFileSync(path.join(dir, 'preferences.json'), JSON.stringify({ theme: 'unknown' }));
+  assert.equal(createStore(dir).get().theme, 'system');
+});

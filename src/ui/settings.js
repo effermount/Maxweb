@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let packaged = false, banner, security;
+let packaged = false, banner, security, selectedTheme = 'system';
 function status(message, error = false) {
   $('status').textContent = message;
   $('status').classList.toggle('error', error);
@@ -9,6 +9,7 @@ async function init() {
   try {
     const state = await window.maxweb.get();
     packaged = state.packaged;
+    renderTheme(state.theme);
     $('notifications').checked = state.notifications;
     renderBanner(state.banner); renderSecurity(state.security);
     $('login').checked = state.openAtLogin;
@@ -124,4 +125,20 @@ $('security-disable').addEventListener('click', () => saveSecurity(true));
 $('lock-now').addEventListener('click', () => window.maxweb.lock().catch(error => status(error.message, true)));
 
 window.maxweb.onLock(() => { for (const id of ['current-pin', 'new-pin', 'confirm-pin']) $(id).value = ''; });
+
+
+function renderTheme(state) {
+  selectedTheme = state.source;
+  $('theme').value = state.source;
+  $('theme-hint').textContent = state.source === 'system' ? `Как в macOS · сейчас ${state.dark ? 'тёмная' : 'светлая'}` : 'Выбрана вручную для Maxweb';
+}
+$('theme').addEventListener('change', async () => {
+  const previous = selectedTheme;
+  $('theme').disabled = true;
+  try { renderTheme(await window.maxweb.theme($('theme').value)); $('theme-feedback').textContent = 'Тема сохранена. Изменения применены сразу.'; $('theme-feedback').classList.remove('error'); }
+  catch (error) { $('theme').value = previous; $('theme-feedback').textContent = error.message; $('theme-feedback').classList.add('error'); }
+  finally { $('theme').disabled = false; }
+});
+window.maxweb.onTheme(renderTheme);
+
 void init();

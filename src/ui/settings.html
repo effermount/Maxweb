@@ -5,12 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Настройки Maxweb</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="style.css">
   <script src="settings.js" defer></script>
 </head>
 <body>
   <main>
     <header><img src="../../assets/icon.png" alt="" width="64" height="64"><div><h1>Maxweb<span>ДЛЯ APPLE SILICON</span></h1><p>Ваш MAX. В своём окне.</p></div></header>
+    <div class="section-label">ВНЕШНИЙ ВИД</div>
+    <section class="card">
+      <label class="row theme-row" for="theme"><span><strong>Тема приложения</strong><small id="theme-hint">Боковая панель, настройки и экран блокировки</small></span><select id="theme"><option value="system">Как в macOS</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
+    </section>
+    <p class="hint" id="theme-feedback" role="status" aria-live="polite">Системная тема меняется вместе с оформлением Mac. Светлую или тёмную можно выбрать вручную.</p>
     <div class="section-label">ОБНОВЛЕНИЯ ПРИЛОЖЕНИЯ</div>
     <section class="card updates-card">
       <div class="update-header"><div><strong id="update-title">Обновления Maxweb</strong><small id="update-message" role="status" aria-live="polite">Проверка новых версий через GitHub Releases</small></div><span id="update-version" class="pill"></span></div>

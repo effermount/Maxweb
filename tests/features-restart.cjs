@@ -1,5 +1,5 @@
 'use strict';
-const { app, session } = require('electron');
+const { app, session, nativeTheme } = require('electron');
 const assert = require('node:assert/strict');
 app.setPath('userData', process.env.MAXWEB_FEATURE_PROFILE);
 const { createStore } = require('../src/store.cjs');
@@ -12,6 +12,7 @@ const client = require('../src/main.cjs');
 const deadline = setTimeout(() => app.exit(1), 20000);
 client.ready.then(async () => {
  const win = client.getMainWindow();
+ assert.equal(preferences.theme, 'dark'); assert.equal(nativeTheme.themeSource, 'dark'); assert.equal(nativeTheme.shouldUseDarkColors, true);
  assert.equal(client.getState().locked, true); assert.equal(client.getState().accounts, undefined);
  for (const view of win.contentView.children) assert.equal(view.getVisible(), false);
  await client.getSecurity().unlock('493725');

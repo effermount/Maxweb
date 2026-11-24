@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, WebContentsView, Menu, Tray, nativeImage, session, shell, ipcMain, Notification, dialog, systemPreferences, powerMonitor, screen, safeStorage } = require('electron');
+const { app, BrowserWindow, WebContentsView, Menu, Tray, nativeImage, session, shell, ipcMain, Notification, dialog, systemPreferences, powerMonitor, screen, safeStorage, nativeTheme } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -33,6 +33,15 @@ const preferences = () => store.get();
 const activeId = () => preferences().activeAccountId;
 const activeRuntime = () => runtimes.get(activeId());
 
+const themeState = () => ({ source: preferences().theme, dark: nativeTheme.shouldUseDarkColors });
+const themeBackground = pane => nativeTheme.shouldUseDarkColors ? (pane === 'settings' ? '#1b1b23' : '#20202a') : (pane === 'settings' ? '#f6f5fa' : '#f1eff7');
+function themeChanged() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(themeBackground('shell'));
+  if (settingsView && !settingsView.webContents.isDestroyed()) {
+    settingsView.setBackgroundColor(themeBackground('settings'));
+    settingsView.webContents.send('theme:state', themeState());
+  }
+}
 let pendingNotificationClick;
 function clearAccountNotifications(id) {
   if (pendingNotificationClick?.id === id) pendingNotificationClick = null;
@@ -212,7 +221,7 @@ function showSettings() {
   if (security.locked) { showWindow(); return; }
   if (!settingsView) {
     settingsView = new WebContentsView({ webPreferences: localPreferences('settings-preload.cjs') });
-    settingsView.setBackgroundColor('#f6f5fa');
+    settingsView.setBackgroundColor(themeBackground('settings'));
     mainWindow.contentView.addChildView(settingsView);
     settingsView.webContents.on('before-input-event', () => security.activity());
     settingsView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -229,7 +238,7 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     title: 'Maxweb', width: Math.min(saved.width, area.width), height: Math.min(saved.height, area.height),
     ...(visible ? { x: saved.x, y: saved.y } : {}), minWidth: 1000, minHeight: 650,
-    backgroundColor: '#f1eff7', show: false, webPreferences: localPreferences('shell-preload.cjs')
+    backgroundColor: themeBackground('shell'), show: false, webPreferences: localPreferences('shell-preload.cjs')
   });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', event => event.preventDefault());
@@ -348,7 +357,13 @@ function bindIPC() {
   handle('accounts:add', 'shell', addAccount);
   handle('accounts:rename', 'shell', renameAccount);
   handle('shell:settings', 'shell', () => { showSettings(); });
-  handle('settings:get', 'settings', () => ({ notifications: preferences().notifications, banner: preferences().banner, security: security.snapshot(), openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
+  handle('settings:get', 'settings', () => ({ theme: themeState(), notifications: preferences().notifications, banner: preferences().banner, security: security.snapshot(), openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
+  handle('settings:theme', 'settings', source => {
+    if (!['system', 'light', 'dark'].includes(source)) throw new Error('Выберите системную, светлую или тёмную тему.');
+    store.set({ theme: source });
+    nativeTheme.themeSource = source; themeChanged();
+    return themeState();
+  });
   handle('settings:notifications', 'settings', enabled => {
     if (typeof enabled !== 'boolean') throw new Error('Неверное значение.');
     store.set({ notifications: enabled });
@@ -439,6 +454,8 @@ app.on('before-quit', () => {
 app.on('window-all-closed', () => {});
 const ready = hasLock ? app.whenReady().then(async () => {
   store = createStore(app.getPath('userData'));
+  nativeTheme.themeSource = preferences().theme;
+  nativeTheme.on('updated', themeChanged);
   security = new AppSecurity({
     store,
     encrypt: async value => {

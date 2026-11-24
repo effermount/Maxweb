@@ -1,5 +1,5 @@
 'use strict';
-const { app, session, Notification, powerMonitor } = require('electron');
+const { app, session, Notification, powerMonitor, nativeTheme } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -54,6 +54,37 @@ client.ready.then(async () => {
  const js = code => settings.executeJavaScript(code);
  await waitFor(() => js('document.getElementById("version").textContent.includes("1.2")'), 'Settings did not initialize');
  assert.equal(await js('document.documentElement.scrollWidth <= innerWidth'), true);
+ // Use the actual setting control and native media queries; account pages must stay alive.
+ await primary.executeJavaScript('window.themeSurvivor = "same-document"');
+ async function chooseTheme(source) {
+   await js(`document.getElementById("theme").value=${JSON.stringify(source)};document.getElementById("theme").dispatchEvent(new Event("change"));void 0`);
+   await waitFor(() => js('!document.getElementById("theme").disabled'), 'Theme setting did not finish');
+ }
+ async function expectTheme(dark) {
+   for (const contents of [shell, settings]) await waitFor(() => contents.executeJavaScript(`matchMedia('(prefers-color-scheme: dark)').matches === ${dark}`), 'Native theme did not reach renderer');
+   assert.equal(await sj('getComputedStyle(document.documentElement).backgroundColor'), dark ? 'rgb(32, 32, 42)' : 'rgb(241, 239, 247)');
+   assert.equal(await js('getComputedStyle(document.documentElement).backgroundColor'), dark ? 'rgb(27, 27, 35)' : 'rgb(246, 245, 250)');
+ }
+ await chooseTheme('dark'); await expectTheme(true);
+ assert.equal((await js('window.maxweb.get()')).theme.source, 'dark');
+ await pause(150);
+ fs.writeFileSync(path.join(qa, 'theme-dark-settings.png'), (await settings.capturePage()).toPNG());
+ fs.writeFileSync(path.join(qa, 'theme-dark-sidebar.png'), (await shell.capturePage()).toPNG());
+ await chooseTheme('light'); await expectTheme(false);
+ await pause(150);
+ fs.writeFileSync(path.join(qa, 'theme-light-settings.png'), (await settings.capturePage()).toPNG());
+ await chooseTheme('system');
+ assert.equal(nativeTheme.themeSource, 'system');
+ // Model native appearance changes without changing the user's macOS preferences.
+ nativeTheme.themeSource = 'dark'; await expectTheme(true);
+ assert.equal((await js('window.maxweb.get()')).theme.source, 'system');
+ nativeTheme.themeSource = 'light'; await expectTheme(false);
+ await chooseTheme('dark');
+ await assert.rejects(js('window.maxweb.theme("invalid")'));
+ assert.equal(nativeTheme.themeSource, 'dark');
+ assert.equal(await primary.executeJavaScript('window.themeSurvivor'), 'same-document');
+ console.log('PASS: light, dark and system appearance update both renderers without reload; manual selection is validated');
+
  await js('document.querySelector("#security-form").scrollIntoView()'); await pause(200);
  fs.writeFileSync(path.join(qa, 'security-settings.png'), (await settings.capturePage()).toPNG());
  assert.equal(await js('document.querySelector("#banner-text").checked'), true);
@@ -77,6 +108,7 @@ client.ready.then(async () => {
  assert.equal(client.getState().locked, true); assert.equal(client.getState().accounts, undefined);
  for (const view of win.contentView.children) assert.equal(view.getVisible(), false);
  await waitFor(() => sj('!document.querySelector("#lock-screen").hidden'), 'Lock screen not shown');
+ assert.equal(await sj('getComputedStyle(document.querySelector("#lock-screen")).backgroundColor'), 'rgb(32, 32, 42)');
  await assert.rejects(sj('window.maxwebShell.select("default")'));
  await assert.rejects(js('window.maxweb.get()'));
  await assert.rejects(sj('window.maxwebShell.unlock("000000")'));

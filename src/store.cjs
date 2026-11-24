@@ -9,13 +9,14 @@ const releaseConfig = require('./release-config.json');
 function createStore(directory) {
   const file = path.join(directory, 'preferences.json');
   let data = {
-    notifications: true, banner: normalizeBanner(), sidebarCollapsed: false, security: normalizeSecurity(), window: { width: 1180, height: 820 },
+    theme: 'system', notifications: true, banner: normalizeBanner(), sidebarCollapsed: false, security: normalizeSecurity(), window: { width: 1180, height: 820 },
     accounts: normalizeAccounts(), activeAccountId: 'default',
     updates: { repository: releaseConfig.repository, autoCheck: true, userConfigured: false }
   };
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (typeof saved.notifications === 'boolean') data.notifications = saved.notifications;
+    if (['system', 'light', 'dark'].includes(saved.theme)) data.theme = saved.theme;
     data.banner = normalizeBanner(saved.banner);
     data.security = normalizeSecurity(saved.security);
     data.sidebarCollapsed = saved.sidebarCollapsed === true;

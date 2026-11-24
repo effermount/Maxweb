@@ -1,6 +1,12 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('maxweb', {
+  theme: value => ipcRenderer.invoke('settings:theme', value),
+  onTheme: callback => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('theme:state', listener);
+    return () => ipcRenderer.removeListener('theme:state', listener);
+  },
   banner: value => ipcRenderer.invoke('settings:banner', value),
   security: value => ipcRenderer.invoke('settings:security', value),
   lock: () => ipcRenderer.invoke('settings:lock'),
