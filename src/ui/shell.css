@@ -1,10 +1,16 @@
-:root { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: var(--sidebar-text); background: var(--sidebar);  }
+:root { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: var(--sidebar-text); background: var(--sidebar); }
 * { box-sizing: border-box; }
 body { margin: 0; }
-aside { width: 220px; height: 100vh; display: flex; flex-direction: column; padding: 22px 12px 12px; border-right: 1px solid var(--border); }
-header { display: flex; align-items: center; gap: 10px; padding: 0 8px 28px; }
-h1 { margin: 0 0 3px; font-size: 18px; letter-spacing: -.6px; }
-header span { color: var(--muted); font-size: 10px; }
+aside { width: 220px; height: 100vh; display: flex; flex-direction: column; padding: 12px; border-right: 1px solid var(--border); }
+.sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; margin-bottom: 22px; padding: 0 3px; flex-shrink: 0; }
+.brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.brand-mark { width: 26px; height: 26px; flex-shrink: 0; fill: var(--accent-text); }
+.brand-accent { fill: var(--accent); }
+h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.5px; }
+.collapse { display: grid; place-items: center; width: 32px; height: 32px; padding: 6px; flex-shrink: 0; border-radius: 8px; color: var(--muted); }
+.collapse svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.collapse:hover { color: var(--sidebar-text); }
+.collapse-chevron { transform-origin: 14.5px 12px; }
 .section-heading { display: flex; justify-content: space-between; padding: 0 10px 10px; font-size: 9px; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
 .section-heading span:last-child { letter-spacing: 0; font-weight: 400; }
 nav { overflow-y: auto; min-height: 90px; flex: 1; padding-bottom: 12px; }
@@ -25,7 +31,7 @@ button:disabled { opacity: .45; cursor: default; }
 .rename { width: 23px; height: 30px; border-radius: 5px; color: var(--muted); font-size: 13px; padding: 0; }
 .badge { border-radius: 12px; background: var(--accent); color: white; font-size: 9px; font-weight: 700; padding: 3px 5px; position: absolute; left: 31px; top: 5px; border: 2px solid var(--sidebar); }
 .add { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--accent-text); padding: 12px 9px; border-radius: 9px; text-align: left; }
-.add span { font-size: 20px; line-height: 16px; }
+.add > span:first-child { font-size: 20px; line-height: 16px; }
 .bottom { border-top: 1px solid var(--divider); margin-top: 12px; padding-top: 12px; }
 .background-note { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--muted); margin: 3px 8px 15px; }
 .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success-text); }
@@ -44,12 +50,11 @@ form button { border-radius: 6px; padding: 7px; font-size: 10px; }
 form button.accent { background: var(--accent); color: white; }
 #error { font-size: 10px; line-height: 1.5; color: var(--error); padding: 0 9px; margin: 0; }
 
-aside { position: relative; padding-top: 52px; }
-.collapse { position: absolute; right: 12px; top: 12px; width: 30px; height: 28px; border-radius: 7px; font-size: 20px; color: var(--avatar-text); }
-.collapsed aside { width: 72px; padding: 52px 10px 12px; }
-.collapsed header { padding: 0 8px 18px; }
-.collapsed header img { width: 32px; height: 32px; }
-.collapsed header div, .collapsed .section-heading, .collapsed .account-label, .collapsed .rename,
+.collapsed aside { width: 72px; padding: 12px 10px; }
+.collapsed .sidebar-header { justify-content: center; padding: 0; margin-bottom: 20px; }
+.collapsed .collapse { width: 36px; height: 36px; border-radius: 10px; }
+.collapsed .collapse-chevron { transform: rotate(180deg); }
+.collapsed .brand, .collapsed .section-heading, .collapsed .account-label, .collapsed .rename,
 .collapsed .background-note, .collapsed footer, .collapsed .settings span:nth-child(2), .collapsed .add-label, .collapsed #update-alert { display: none; }
 .collapsed .account { width: 100%; padding: 9px; min-height: 52px; }
 .collapsed .badge { left: 25px; top: 0; }

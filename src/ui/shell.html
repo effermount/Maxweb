@@ -5,8 +5,15 @@
   <title>Maxweb</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="shell.css"><script src="shell.js" defer></script>
 </head><body class="loading">
   <aside aria-label="Аккаунты MAX">
-    <button id="collapse" class="collapse" title="Свернуть панель" aria-label="Свернуть панель" aria-expanded="true">◧</button>
-    <header><img src="../../assets/icon.png" alt="" width="35" height="35"><div><h1>Maxweb</h1><span>Все ваши аккаунты</span></div></header>
+    <header class="sidebar-header">
+      <div class="brand" aria-label="Maxweb">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 25V7h4l9 11L25 7h4v18h-5V15l-8 10-8-10v10Z"/><path class="brand-accent" d="M24 28h5v2h-5Z"/></svg>
+        <h1>Maxweb</h1>
+      </div>
+      <button id="collapse" class="collapse" title="Свернуть панель" aria-label="Свернуть панель" aria-expanded="true" aria-controls="accounts">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path class="collapse-chevron" d="m16 9-3 3 3 3"/></svg>
+      </button>
+    </header>
     <div class="section-heading"><span>АККАУНТЫ</span><span title="Переключение аккаунтов">⌘1–9</span></div>
     <nav id="accounts" aria-label="Переключение аккаунтов"></nav>
     <form id="account-form" hidden>
