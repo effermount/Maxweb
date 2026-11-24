@@ -64,3 +64,15 @@ test('theme defaults to system, persists overrides and rejects invalid saved val
   fs.writeFileSync(path.join(dir, 'preferences.json'), JSON.stringify({ theme: 'unknown' }));
   assert.equal(createStore(dir).get().theme, 'system');
 });
+
+test('MAX zoom persists as a percentage and ignores invalid saved values', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-zoom-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  assert.equal(createStore(dir).get().maxZoom, 100);
+  createStore(dir).set({ maxZoom: 125 });
+  assert.equal(createStore(dir).get().maxZoom, 125);
+  for (const maxZoom of [0, 49, 201, 125.5, '125', null]) {
+    fs.writeFileSync(path.join(dir, 'preferences.json'), JSON.stringify({ maxZoom }));
+    assert.equal(createStore(dir).get().maxZoom, 100);
+  }
+});

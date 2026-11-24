@@ -1,6 +1,12 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('maxweb', {
+  maxZoom: value => ipcRenderer.invoke('settings:max-zoom', value),
+  onMaxZoom: callback => {
+    const listener = (_event, percent) => callback(percent);
+    ipcRenderer.on('max-zoom:state', listener);
+    return () => ipcRenderer.removeListener('max-zoom:state', listener);
+  },
   theme: value => ipcRenderer.invoke('settings:theme', value),
   onTheme: callback => {
     const listener = (_event, state) => callback(state);

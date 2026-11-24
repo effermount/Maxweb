@@ -1,5 +1,5 @@
 'use strict';
-const { app, session, Notification, powerMonitor, nativeTheme } = require('electron');
+const { app, session, Notification, powerMonitor, nativeTheme, Menu } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -54,6 +54,36 @@ client.ready.then(async () => {
  const js = code => settings.executeJavaScript(code);
  await waitFor(() => js('document.getElementById("version").textContent.includes("1.2")'), 'Settings did not initialize');
  assert.equal(await js('document.documentElement.scrollWidth <= innerWidth'), true);
+ const secondContents = client.getAccountContents(secondID);
+ const originalWidth = await primary.executeJavaScript('innerWidth');
+ await primary.executeJavaScript('window.zoomSurvivor="same-document"');
+ await js('document.getElementById("max-zoom").value="125";document.getElementById("max-zoom").dispatchEvent(new Event("change"));void 0');
+ await waitFor(() => js('!document.getElementById("max-zoom").disabled'), 'Zoom setting did not finish');
+ for (const contents of [primary, secondContents]) assert.ok(Math.abs(contents.getZoomFactor() - 1.25) < 0.001);
+ assert.equal(shell.getZoomFactor(), 1); assert.equal(settings.getZoomFactor(), 1);
+ client.selectAccount('default');
+ await waitFor(() => primary.executeJavaScript(`innerWidth < ${originalWidth}`), 'Content viewport did not scale');
+ client.showSettings();
+ assert.equal(await primary.executeJavaScript('window.zoomSurvivor'), 'same-document');
+ await client.loadMax(secondID); await loaded(secondContents);
+ assert.ok(Math.abs(secondContents.getZoomFactor() - 1.25) < 0.001);
+ const zoomMenu = Menu.getApplicationMenu().items.find(item => item.label === 'Вид').submenu;
+ zoomMenu.items.find(item => item.label === 'Увеличить MAX').click({}, win, settings);
+ await waitFor(() => js('document.getElementById("max-zoom").value === "150"'), 'Keyboard/menu zoom did not update setting');
+ assert.ok(Math.abs(primary.getZoomFactor() - 1.5) < 0.001); assert.equal(settings.getZoomFactor(), 1);
+ zoomMenu.items.find(item => item.label === 'Масштаб MAX 100%').click({}, win, settings);
+ await waitFor(() => js('document.getElementById("max-zoom").value === "100"'), 'Reset did not update setting');
+ assert.equal(primary.getZoomFactor(), 1);
+ await assert.rejects(js('window.maxweb.maxZoom(201)'));
+ await assert.rejects(js('window.maxweb.maxZoom(0)'));
+ await assert.rejects(js('window.maxweb.maxZoom(125.5)'));
+ await js('window.maxweb.maxZoom(125)');
+ await js('document.getElementById("max-zoom-reset").click()');
+ await waitFor(() => js('document.getElementById("max-zoom").value === "100"'), '100% reset button failed');
+ await js('window.maxweb.maxZoom(125)');
+ assert.equal((await js('window.maxweb.get()')).maxZoom, 125);
+ console.log('PASS: percentage field, native MAX viewport, all accounts, reload, menu synchronization and reset; shell/settings stay at 100%');
+
  // Use the actual setting control and native media queries; account pages must stay alive.
  await primary.executeJavaScript('window.themeSurvivor = "same-document"');
  async function chooseTheme(source) {
@@ -111,6 +141,7 @@ client.ready.then(async () => {
  assert.equal(await sj('getComputedStyle(document.querySelector("#lock-screen")).backgroundColor'), 'rgb(32, 32, 42)');
  await assert.rejects(sj('window.maxwebShell.select("default")'));
  await assert.rejects(js('window.maxweb.get()'));
+ await assert.rejects(js('window.maxweb.maxZoom(100)'));
  await assert.rejects(sj('window.maxwebShell.unlock("000000")'));
  assert.equal(client.getState().locked, true);
  await primary.executeJavaScript('window.lockNotice=new Notification("Bob",{body:"Very private"}); window.lockClicks=0; window.lockNotice.onclick=()=>window.lockClicks++; void 0');

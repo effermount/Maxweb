@@ -14,6 +14,9 @@
     <div class="section-label">ВНЕШНИЙ ВИД</div>
     <section class="card">
       <label class="row theme-row" for="theme"><span><strong>Тема приложения</strong><small id="theme-hint">Боковая панель, настройки и экран блокировки</small></span><select id="theme"><option value="system">Как в macOS</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
+      <div class="divider"></div>
+      <div class="row zoom-row"><label for="max-zoom"><strong>Масштаб MAX</strong><small id="max-zoom-hint">Только содержимое MAX во всех аккаунтах · 50–200%</small></label><div class="zoom-controls"><div class="zoom-value"><input id="max-zoom" type="number" min="50" max="200" step="1" value="100" inputmode="numeric" aria-describedby="max-zoom-hint"><span aria-hidden="true">%</span></div><button id="max-zoom-reset" class="secondary" type="button" title="Вернуть масштаб MAX к 100%">100%</button></div></div>
+      <p class="hint zoom-feedback" id="max-zoom-feedback" role="status" aria-live="polite">⌘+ / ⌘− — изменить, ⌘0 — сбросить</p>
     </section>
     <p class="hint" id="theme-feedback" role="status" aria-live="polite">Системная тема меняется вместе с оформлением Mac. Светлую или тёмную можно выбрать вручную.</p>
     <div class="section-label">ОБНОВЛЕНИЯ ПРИЛОЖЕНИЯ</div>

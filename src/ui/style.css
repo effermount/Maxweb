@@ -320,3 +320,13 @@ select, #security-form input[type="password"], #idle-seconds { color: var(--text
 .theme-row select { font: inherit; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--field); }
 #theme-feedback.error { color: var(--error); }
 @media (max-width: 520px) { .theme-row { align-items: flex-start; flex-direction: column; } .theme-row select { width: 100%; } }
+
+.zoom-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.zoom-value { display: flex; align-items: center; gap: 4px; padding: 8px 10px; background: var(--field); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+.zoom-value input { position: static; opacity: 1; width: 55px; height: auto; border: 0; background: transparent; color: inherit; font: inherit; text-align: right; }
+.zoom-value:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.zoom-value input:focus-visible { outline: none; }
+.zoom-value span { color: var(--muted); font-size: 11px; }
+.zoom-feedback { margin: 0 18px 14px; }
+.zoom-feedback.error { color: var(--error); }
+@media (max-width: 520px) { .zoom-row { flex-wrap: wrap; } }

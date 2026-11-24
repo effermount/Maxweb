@@ -19,6 +19,13 @@ client.ready.then(async () => {
  assert.equal(client.getState().sidebarCollapsed, true);
  assert.equal(client.getState().accounts[0].name, 'Анна Тест');
  assert.equal(preferences.banner.showText, false);
+ assert.equal(preferences.maxZoom, 125);
+ for (const account of preferences.accounts) {
+   const contents = client.getAccountContents(account.id);
+   if (contents.isLoading()) await new Promise(resolve => contents.once('did-stop-loading', resolve));
+   assert.ok(Math.abs(contents.getZoomFactor() - 1.25) < 0.001);
+ }
+ assert.equal(win.webContents.getZoomFactor(), 1);
  client.showSettings(); assert.equal(client.getState().pane, 'settings');
  console.log('PASS: real process restart starts locked, decrypts PIN verifier and restores sidebar, names and banner settings');
  clearTimeout(deadline); app.quit();

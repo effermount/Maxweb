@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let packaged = false, banner, security, selectedTheme = 'system';
+let packaged = false, banner, security, selectedTheme = 'system', selectedMaxZoom = 100;
 function status(message, error = false) {
   $('status').textContent = message;
   $('status').classList.toggle('error', error);
@@ -10,6 +10,7 @@ async function init() {
     const state = await window.maxweb.get();
     packaged = state.packaged;
     renderTheme(state.theme);
+    renderMaxZoom(state.maxZoom);
     $('notifications').checked = state.notifications;
     renderBanner(state.banner); renderSecurity(state.security);
     $('login').checked = state.openAtLogin;
@@ -141,4 +142,24 @@ $('theme').addEventListener('change', async () => {
 });
 window.maxweb.onTheme(renderTheme);
 
+function renderMaxZoom(percent) {
+  selectedMaxZoom = percent;
+  $('max-zoom').value = String(percent);
+  $('max-zoom-reset').disabled = percent === 100;
+}
+async function saveMaxZoom(percent) {
+  $('max-zoom').disabled = true; $('max-zoom-reset').disabled = true;
+  try {
+    renderMaxZoom(await window.maxweb.maxZoom(percent));
+    $('max-zoom-feedback').textContent = `Масштаб MAX: ${selectedMaxZoom}%. Сохранён для всех аккаунтов.`;
+    $('max-zoom-feedback').classList.remove('error');
+  } catch (error) {
+    renderMaxZoom(selectedMaxZoom);
+    $('max-zoom-feedback').textContent = error.message; $('max-zoom-feedback').classList.add('error');
+  } finally { $('max-zoom').disabled = false; $('max-zoom-reset').disabled = selectedMaxZoom === 100; }
+}
+$('max-zoom').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); $('max-zoom').blur(); } });
+$('max-zoom').addEventListener('change', () => saveMaxZoom($('max-zoom').valueAsNumber));
+$('max-zoom-reset').addEventListener('click', () => saveMaxZoom(100));
+window.maxweb.onMaxZoom(renderMaxZoom);
 void init();

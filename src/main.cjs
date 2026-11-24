@@ -33,6 +33,24 @@ const preferences = () => store.get();
 const activeId = () => preferences().activeAccountId;
 const activeRuntime = () => runtimes.get(activeId());
 
+const MAX_ZOOM_LEVELS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
+function setMaxZoom(percent) {
+  security.requireUnlocked();
+  if (!Number.isInteger(percent) || percent < 50 || percent > 200) throw new Error('Введите целый масштаб от 50 до 200%.');
+  if (preferences().maxZoom !== percent) store.set({ maxZoom: percent });
+  for (const { view } of runtimes.values()) {
+    const contents = view.webContents;
+    if (!contents.isDestroyed() && isMaxURL(contents.getURL())) contents.setZoomFactor(percent / 100);
+  }
+  if (settingsView && !settingsView.webContents.isDestroyed()) settingsView.webContents.send('max-zoom:state', percent);
+  return percent;
+}
+function stepMaxZoom(direction) {
+  if (security.locked) return;
+  const current = preferences().maxZoom;
+  const next = direction === 'in' ? MAX_ZOOM_LEVELS.find(value => value > current) : MAX_ZOOM_LEVELS.findLast(value => value < current);
+  setMaxZoom(next ?? current);
+}
 const themeState = () => ({ source: preferences().theme, dark: nativeTheme.shouldUseDarkColors });
 const themeBackground = pane => nativeTheme.shouldUseDarkColors ? (pane === 'settings' ? '#1b1b23' : '#20202a') : (pane === 'settings' ? '#f6f5fa' : '#f1eff7');
 function themeChanged() {
@@ -182,7 +200,7 @@ function createAccountView(account) {
   configureSession(ses);
   const view = new WebContentsView({ webPreferences: {
     preload: path.join(__dirname, 'account-preload.cjs'),
-    session: ses, nodeIntegration: false, contextIsolation: true, sandbox: true,
+    session: ses, zoomFactor: preferences().maxZoom / 100, zoomMode: 'isolated', nodeIntegration: false, contextIsolation: true, sandbox: true,
     webSecurity: true, allowRunningInsecureContent: false, backgroundThrottling: false, spellcheck: true
   } });
   view.setBackgroundColor('#17181c');
@@ -192,10 +210,14 @@ function createAccountView(account) {
   runtimes.set(account.id, runtime);
   const contents = view.webContents;
   contents.on('before-input-event', () => security.activity());
+  contents.on('zoom-changed', (_event, direction) => {
+    setImmediate(() => { if (!contents.isDestroyed() && isMaxURL(contents.getURL())) stepMaxZoom(direction); });
+  });
   secureNavigation(contents, account.id);
   contents.on('did-start-navigation', details => { if (details.isMainFrame && !details.isSameDocument) clearAccountNotifications(account.id); });
   contents.on('page-title-updated', (_event, title) => { runtime.unread = unreadBadge(title); broadcast(); });
   contents.on('did-finish-load', () => {
+    contents.setZoomFactor(isMaxURL(contents.getURL()) ? preferences().maxZoom / 100 : 1);
     runtime.status = contents.getURL() === offlineURL ? 'offline' : 'ready'; broadcast();
   });
   contents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
@@ -215,7 +237,7 @@ function createAccountView(account) {
   return runtime;
 }
 function localPreferences(preload) {
-  return { preload: path.join(__dirname, preload), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true };
+  return { preload: path.join(__dirname, preload), zoomMode: 'disabled', zoomFactor: 1, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true };
 }
 function showSettings() {
   if (security.locked) { showWindow(); return; }
@@ -357,7 +379,8 @@ function bindIPC() {
   handle('accounts:add', 'shell', addAccount);
   handle('accounts:rename', 'shell', renameAccount);
   handle('shell:settings', 'shell', () => { showSettings(); });
-  handle('settings:get', 'settings', () => ({ theme: themeState(), notifications: preferences().notifications, banner: preferences().banner, security: security.snapshot(), openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
+  handle('settings:get', 'settings', () => ({ theme: themeState(), maxZoom: preferences().maxZoom, notifications: preferences().notifications, banner: preferences().banner, security: security.snapshot(), openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
+  handle('settings:max-zoom', 'settings', setMaxZoom);
   handle('settings:theme', 'settings', source => {
     if (!['system', 'light', 'dark'].includes(source)) throw new Error('Выберите системную, светлую или тёмную тему.');
     store.set({ theme: source });
@@ -421,7 +444,10 @@ function createMenu() {
     { label: 'Вид', submenu: [
       { label: 'Свернуть / развернуть панель', accelerator: 'CmdOrCtrl+Shift+S', click: () => { if (security.locked) return; store.set({ sidebarCollapsed: !preferences().sidebarCollapsed }); layout(); broadcast(); } },
       { label: 'Перезагрузить MAX', accelerator: 'CmdOrCtrl+R', click: () => loadMax() },
-      { type: 'separator' }, { role: 'resetZoom', label: 'Фактический размер' }, { role: 'zoomIn', label: 'Увеличить' }, { role: 'zoomOut', label: 'Уменьшить' },
+      { type: 'separator' },
+      { label: 'Масштаб MAX 100%', accelerator: 'CmdOrCtrl+0', click: () => { if (!security.locked) setMaxZoom(100); } },
+      { label: 'Увеличить MAX', accelerator: 'CmdOrCtrl+Plus', click: () => stepMaxZoom('in') },
+      { label: 'Уменьшить MAX', accelerator: 'CmdOrCtrl+-', click: () => stepMaxZoom('out') },
       { type: 'separator' }, { role: 'togglefullscreen', label: 'На весь экран' }
     ] },
     { label: 'Окно', submenu: [{ role: 'minimize', label: 'Свернуть' }, { role: 'zoom', label: 'Масштабировать' }, { role: 'close', label: 'Закрыть окно' }] },

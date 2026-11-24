@@ -9,7 +9,7 @@ const releaseConfig = require('./release-config.json');
 function createStore(directory) {
   const file = path.join(directory, 'preferences.json');
   let data = {
-    theme: 'system', notifications: true, banner: normalizeBanner(), sidebarCollapsed: false, security: normalizeSecurity(), window: { width: 1180, height: 820 },
+    theme: 'system', maxZoom: 100, notifications: true, banner: normalizeBanner(), sidebarCollapsed: false, security: normalizeSecurity(), window: { width: 1180, height: 820 },
     accounts: normalizeAccounts(), activeAccountId: 'default',
     updates: { repository: releaseConfig.repository, autoCheck: true, userConfigured: false }
   };
@@ -17,6 +17,7 @@ function createStore(directory) {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (typeof saved.notifications === 'boolean') data.notifications = saved.notifications;
     if (['system', 'light', 'dark'].includes(saved.theme)) data.theme = saved.theme;
+    if (Number.isInteger(saved.maxZoom) && saved.maxZoom >= 50 && saved.maxZoom <= 200) data.maxZoom = saved.maxZoom;
     data.banner = normalizeBanner(saved.banner);
     data.security = normalizeSecurity(saved.security);
     data.sidebarCollapsed = saved.sidebarCollapsed === true;
