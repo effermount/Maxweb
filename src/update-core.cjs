@@ -44,15 +44,36 @@ function verifyManifest(manifest, publicKey, baseURL, { allowFile = false } = {}
   if (url.username || url.password || url.hash || !(url.protocol === 'https:' || allowFile && base.protocol === 'file:' && url.protocol === 'file:' && path.dirname(fileURLToPath(url)) === path.dirname(fileURLToPath(base)))) throw new Error('Обновления разрешены только по HTTPS или из выбранной локальной папки.');
   return { ...payload(manifest), signature: manifest.signature, downloadURL: url.href };
 }
+async function fetchResource(fetchImpl, url, timeout) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await fetchImpl(url, {
+        headers: { 'User-Agent': 'Maxweb-Updater', Accept: 'application/vnd.github+json, application/json, application/octet-stream' },
+        redirect: 'manual', credentials: 'omit', signal: AbortSignal.timeout(timeout)
+      });
+    } catch (error) {
+      const code = error.cause?.code || error.code || '';
+      const timedOut = ['TimeoutError', 'AbortError'].includes(error.name) || ['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT'].includes(code);
+      const transient = ['ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_SOCKET'].includes(code) || (!code && error.message === 'fetch failed');
+      if (!attempt && transient && !timedOut) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      const message = timedOut
+        ? 'Сервер обновлений не ответил вовремя. Повторите проверку позже.'
+        : /CERT|TLS|SSL|SELF_SIGNED|UNABLE_TO_VERIFY/.test(code)
+          ? 'Не удалось проверить защищённое соединение с сервером обновлений. Проверьте дату и время на Mac и настройки сети.'
+          : 'Не удалось подключиться к серверу обновлений. Проверьте интернет-соединение и настройки VPN или прокси, затем повторите попытку.';
+      throw new Error(message, { cause: error });
+    }
+  }
+}
 async function resource(urlValue, { fetchImpl = fetch, allowFile = false, timeout = 30000 } = {}) {
   let url = new URL(urlValue);
   if (allowFile && url.protocol === 'file:') return { body: fs.createReadStream(fileURLToPath(url)), headers: new Map() };
   for (let redirects = 0; redirects <= 6; redirects++) {
     if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Небезопасный адрес сервера обновлений.');
-    const response = await fetchImpl(url.href, {
-      headers: { 'User-Agent': 'Maxweb-Updater', Accept: 'application/vnd.github+json, application/json, application/octet-stream' },
-      redirect: 'manual', credentials: 'omit', signal: AbortSignal.timeout(timeout)
-    });
+    const response = await fetchResource(fetchImpl, url.href, timeout);
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       await response.body?.cancel();

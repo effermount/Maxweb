@@ -46,7 +46,39 @@ if (location.origin === 'https://web.max.ru') {
   } });
   // MAX stores its own profile under viewer['']. Read only that record;
   // do not scan contacts, messages, cookies or authentication records.
-  let readingProfile = false, lastProfileName = '';
+  let readingProfile = false, lastProfile = '', lastAvatarURL = '', avatar = '', avatarRetryAt = 0;
+  async function profileAvatar(baseURL) {
+    if (!baseURL) { lastAvatarURL = ''; avatar = ''; return ''; }
+    if (baseURL === lastAvatarURL && (avatar || Date.now() < avatarRetryAt)) return avatar;
+    if (baseURL !== lastAvatarURL) avatar = '';
+    lastAvatarURL = baseURL; avatarRetryAt = Date.now() + 60000;
+    try {
+      const url = new URL(baseURL);
+      if (url.protocol !== 'https:' || url.username || url.password) return '';
+      url.searchParams.set('fn', 'sqr_128');
+      const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
+      if (!response.ok || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) return '';
+      const reader = response.body.getReader();
+      const chunks = []; let size = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          size += value.length;
+          if (size > 2 * 1024 * 1024) { await reader.cancel(); return ''; }
+          chunks.push(value);
+        }
+      } finally { reader.releaseLock(); }
+      const bitmap = await createImageBitmap(new Blob(chunks));
+      try {
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+        const edge = Math.min(bitmap.width, bitmap.height);
+        canvas.getContext('2d').drawImage(bitmap, (bitmap.width - edge) / 2, (bitmap.height - edge) / 2, edge, edge, 0, 0, 64, 64);
+        avatar = canvas.toDataURL('image/png');
+      } finally { bitmap.close(); }
+      return avatar;
+    } catch { return ''; }
+  }
   async function syncProfile() {
     if (readingProfile) return;
     readingProfile = true;
@@ -67,10 +99,14 @@ if (location.origin === 'https://web.max.ru') {
           const request = db.transaction('viewer', 'readonly').objectStore('viewer').get('');
           request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
         });
-        const names = record?.model?.contact?.names;
+        const contact = record?.model?.contact;
+        const names = contact?.names;
         const own = names?.find(name => name.type === 'ONEME') || names?.[0];
         const name = [own?.firstName, own?.lastName].filter(value => typeof value === 'string' && value.trim()).join(' ').trim().slice(0, 40);
-        if (name && name !== lastProfileName && !/[\x00-\x1f\x7f]/.test(name)) { lastProfileName = name; ipcRenderer.send('account:profile', name); }
+        if (!name || /[\x00-\x1f\x7f]/.test(name)) return;
+        const image = await profileAvatar(typeof contact.baseUrl === 'string' ? contact.baseUrl : '');
+        const profile = JSON.stringify({ name, avatar: image });
+        if (profile !== lastProfile) { lastProfile = profile; ipcRenderer.send('account:profile', { name, avatar: image }); }
       } finally { db.close(); }
     } catch { /* MAX may change its schema; keep the saved account name. */ }
     finally { readingProfile = false; }

@@ -306,7 +306,7 @@ footer small {
 .banner-preview { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin: 10px 18px; }
 .banner-preview p { margin: 8px 0 0; font-size: 12px; }
 #security-form { padding: 0 18px 18px; }
-#security-form > label:not(.row) { display: grid; gap: 8px; font-size: 11px; color: var(--muted); margin: 14px 0; }
+#security-form > label:not(.row), #new-code-fields > label { display: grid; gap: 8px; font-size: 11px; color: var(--muted); margin: 14px 0; }
 #security-form input[type="password"], #idle-seconds { position: static; opacity: 1; width: 100%; height: auto; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: var(--field); }
 #security-form .row { padding: 16px 0; }
 .security-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
@@ -330,3 +330,5 @@ select, #security-form input[type="password"], #idle-seconds { color: var(--text
 .zoom-feedback { margin: 0 18px 14px; }
 .zoom-feedback.error { color: var(--error); }
 @media (max-width: 520px) { .zoom-row { flex-wrap: wrap; } }
+
+#change-code { margin-top: 8px; }

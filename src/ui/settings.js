@@ -101,8 +101,10 @@ function renderSecurity(value) {
   security = value;
   $('security-state').textContent = value.enabled ? 'Защита включена · ⌘L для блокировки' : 'Блокировка выключена';
   $('lock-now').hidden = !value.enabled;
-  $('current-pin-label').hidden = !value.enabled;
-  $('new-pin-label').textContent = value.enabled ? 'Новый код (пусто — оставить текущий)' : 'Код: от 4 до 8 цифр';
+  $('current-pin-label').hidden = true;
+  $('change-code').hidden = !value.enabled;
+  setCodeEditing(false);
+  $('new-pin-label').textContent = value.enabled ? 'Новый код: от 4 до 8 цифр' : 'Код: от 4 до 8 цифр';
   $('security-save').textContent = value.enabled ? 'Сохранить защиту' : 'Включить блокировку';
   $('security-disable').hidden = !value.enabled;
   $('security-touch-id').checked = value.touchIDAvailable && (value.enabled ? value.touchID : true);
@@ -111,7 +113,28 @@ function renderSecurity(value) {
   $('idle-seconds').value = String(value.idleSeconds);
   for (const id of ['current-pin', 'new-pin', 'confirm-pin']) $(id).value = '';
 }
+function setCodeEditing(editing) {
+  $('new-code-fields').hidden = security.enabled && !editing;
+  $('current-pin-label').hidden = !security.enabled || !editing;
+  $('change-code').setAttribute('aria-expanded', String(editing));
+  $('change-code').textContent = editing ? 'Отменить изменение' : 'Изменить код';
+  for (const id of ['current-pin', 'new-pin', 'confirm-pin']) $(id).value = '';
+  for (const id of ['new-pin', 'confirm-pin']) $(id).required = !security.enabled || editing;
+}
+$('change-code').addEventListener('click', () => {
+  const editing = $('change-code').getAttribute('aria-expanded') !== 'true';
+  setCodeEditing(editing);
+  $('security-feedback').textContent = '';
+  if (editing) $('current-pin').focus();
+});
 async function saveSecurity(disable = false) {
+  if (security.enabled && !$('current-pin').value) {
+    $('current-pin-label').hidden = false;
+    $('security-feedback').textContent = disable ? 'Введите текущий код и нажмите «Выключить» ещё раз.' : 'Введите текущий код для сохранения изменений.';
+    $('security-feedback').classList.remove('error');
+    $('current-pin').focus();
+    return;
+  }
   const fields = [...$('security-form').querySelectorAll('input, select, button')];
   for (const field of fields) field.disabled = true;
   try {

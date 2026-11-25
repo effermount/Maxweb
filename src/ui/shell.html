@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
   <title>Maxweb</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="shell.css"><script src="shell.js" defer></script>
 </head><body class="loading">
   <aside aria-label="Аккаунты MAX">
@@ -17,9 +17,10 @@
     <div class="section-heading"><span>АККАУНТЫ</span><span title="Переключение аккаунтов">⌘1–9</span></div>
     <nav id="accounts" aria-label="Переключение аккаунтов"></nav>
     <form id="account-form" hidden>
-      <label for="account-name" id="form-title">Новый аккаунт</label>
+      <label for="account-name" id="form-title">Настройки аккаунта</label>
       <input id="account-name" type="text" maxlength="40" placeholder="Например, Рабочий" autocomplete="off" required>
       <button id="profile-name" type="button" hidden>Использовать имя MAX</button>
+      <button id="logout-account" type="button" class="logout-account" hidden>Выйти из аккаунта</button>
       <div><button id="cancel" type="button">Отмена</button><button class="accent" type="submit" id="save">Добавить</button></div>
     </form>
     <p id="error" role="status" aria-live="polite"></p>
@@ -32,6 +33,7 @@
       <footer><span id="version">Maxweb</span><span>Apple Silicon</span></footer>
     </div>
   </aside>
+<main id="empty-state" hidden><section><h2>Добавьте аккаунт MAX</h2><p>Имя и фото появятся автоматически после входа.</p><button id="empty-add" class="touch-primary">Добавить аккаунт</button></section></main>
 <main id="lock-screen" hidden aria-labelledby="lock-title">
     <section class="lock-card">
       <img class="lock-logo" src="../../assets/icon.png" alt="" width="52" height="52">

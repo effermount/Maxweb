@@ -23,7 +23,7 @@ test('v1.0 migrates to the original persistent partition without touching its fi
 });
 test('account names and partitions reject malformed or shared identities', () => {
   const account = newAccount('Личный');
-  assert.equal(normalizeAccounts([account, account, { id: '../max', name: 'Oops' }]).length, 2);
+  assert.equal(normalizeAccounts([account, account, { id: '../max', name: 'Oops' }]).length, 1);
   assert.throws(() => accountPartition('../max'));
   assert.throws(() => accountName(' '));
   assert.throws(() => accountName('x'.repeat(41)));
@@ -36,4 +36,25 @@ test('automatic names survive repeated normalization while legacy custom names r
   assert.equal(normalized.find(a => a.id === account.id).customName, false);
   assert.equal(normalizeAccounts([{ id: account.id, name: 'Моё имя' }]).find(a => a.id === account.id).customName, true);
   assert.equal(normalizeAccounts([{ ...account, profileName: '\n' }]).find(a => a.id === account.id).name, 'Рабочий');
+});
+
+
+test('explicit account removal survives restart including an empty list', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-remove-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const store = createStore(dir);
+  const account = newAccount();
+  store.set({ accounts: [account], activeAccountId: account.id });
+  assert.deepEqual(createStore(dir).get().accounts, [account]);
+  store.set({ accounts: [], activeAccountId: null });
+  assert.deepEqual(createStore(dir).get().accounts, []);
+  assert.equal(createStore(dir).get().activeAccountId, null);
+});
+test('only bounded PNG thumbnails are persisted for account avatars', () => {
+  const account = newAccount();
+  const avatar = 'data:image/png;base64,aGVsbG8=';
+  assert.equal(normalizeAccounts([{ ...account, avatar }])[0].avatar, avatar);
+  for (const invalid of ['https://example.com/avatar.png', 'data:image/svg+xml;base64,AAAA', 'data:image/png;base64,' + 'A'.repeat(90000)]) {
+    assert.equal(normalizeAccounts([{ ...account, avatar: invalid }])[0].avatar, undefined);
+  }
 });

@@ -100,3 +100,13 @@ form button.accent { background: var(--accent); color: white; }
 .collapsed .account-mute { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; padding: 2px; border: 2px solid var(--sidebar); background: var(--sidebar); border-radius: 7px; }
 .collapsed .account-mute svg { width: 14px; height: 14px; }
 .collapsed .account-mute:hover { background: var(--hover); }
+
+.avatar { position: relative; overflow: hidden; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#logout-account { color: var(--error); margin-top: 8px; width: 100%; text-align: left; }
+#empty-state { position: absolute; inset: 0 0 0 220px; display: grid; place-items: center; text-align: center; padding: 28px; }
+#empty-state section { max-width: 320px; }
+#empty-state h2 { font-size: 22px; margin: 0 0 12px; }
+#empty-state p { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 24px; }
+#empty-add { padding: 12px 24px; }
+.collapsed #empty-state { left: 72px; }

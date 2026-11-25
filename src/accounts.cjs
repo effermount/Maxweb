@@ -8,6 +8,9 @@ function accountName(value) {
   }
   return value.trim();
 }
+function accountAvatar(value) {
+  return typeof value === 'string' && value.length <= 90000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : '';
+}
 function normalizeAccounts(value) {
   const seen = new Set();
   const accounts = [];
@@ -15,6 +18,8 @@ function normalizeAccounts(value) {
     if (!item || !validAccountId(item.id) || seen.has(item.id)) continue;
     try {
       const account = { id: item.id, name: accountName(item.name) };
+      const avatar = accountAvatar(item.avatar);
+      if (avatar) account.avatar = avatar;
       if (item.notifications === false) account.notifications = false;
       if (typeof item.customName === 'boolean') account.customName = item.customName;
       if (typeof item.profileName === 'string') { try { account.profileName = accountName(item.profileName); } catch {} }
@@ -24,12 +29,12 @@ function normalizeAccounts(value) {
     } catch {}
   }
   // Reuse the original v1.0 partition; never move or recreate its login data.
-  if (!seen.has('default')) accounts.unshift({ id: 'default', name: 'Основной' });
+  if (!Array.isArray(value)) accounts.unshift({ id: 'default', name: 'Основной' });
   return accounts;
 }
 function accountPartition(id) {
   if (!validAccountId(id)) throw new Error('Неизвестный аккаунт.');
   return id === 'default' ? 'persist:max' : `persist:max-${id}`;
 }
-function newAccount(name) { return { id: randomUUID(), name: accountName(name), customName: false }; }
-module.exports = { validAccountId, accountName, normalizeAccounts, accountPartition, newAccount };
+function newAccount(name = 'Новый аккаунт') { return { id: randomUUID(), name: accountName(name), customName: false }; }
+module.exports = { validAccountId, accountName, normalizeAccounts, accountPartition, newAccount, accountAvatar };

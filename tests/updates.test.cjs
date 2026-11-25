@@ -76,3 +76,30 @@ test('updater reaches ready only after signed download and never downloads older
   assert.equal((await current.check(pathToFileURL(feed))).status, 'current');
   await assert.rejects(current.download(), /Сначала/);
 });
+
+test('update network requests retry a transient failure once and preserve safe redirect options', async () => {
+  const { readJSON } = require('../src/update-core.cjs');
+  let calls = 0;
+  const value = await readJSON('https://github.com/example/latest.json', { fetchImpl: async (_url, options) => {
+    assert.equal(options.redirect, 'manual');
+    assert.equal(options.credentials, 'omit');
+    if (++calls === 1) throw new TypeError('fetch failed', { cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }) });
+    return Response.json({ version: '1.2.5' });
+  } });
+  assert.equal(value.version, '1.2.5');
+  assert.equal(calls, 2);
+});
+test('update network errors are readable, bounded, and do not retry TLS, timeout or HTTP failures', async () => {
+  const { readJSON } = require('../src/update-core.cjs');
+  for (const [code, expected, count] of [['ECONNRESET', /интернет-соединение/, 2], ['CERT_HAS_EXPIRED', /дату и время/, 1], ['ETIMEDOUT', /не ответил вовремя/, 1]]) {
+    let calls = 0;
+    await assert.rejects(readJSON('https://github.com/example/latest.json', { fetchImpl: async () => {
+      calls++;
+      throw new TypeError('fetch failed', { cause: Object.assign(new Error('network'), { code }) });
+    } }), expected);
+    assert.equal(calls, count);
+  }
+  let calls = 0;
+  await assert.rejects(readJSON('https://github.com/example/latest.json', { fetchImpl: async () => { calls++; return new Response(null, { status: 403 }); } }), /ограничил запросы/);
+  assert.equal(calls, 1);
+});

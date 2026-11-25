@@ -15,8 +15,9 @@ function edit(account = null) {
   if (state.sidebarCollapsed) void window.maxwebShell.collapse(false);
   editingAccount = account; editing = account?.id || null;
   $('profile-name').hidden = !account;
+  $('logout-account').hidden = !account;
   $('profile-name').textContent = account?.profileName ? `Использовать имя MAX: ${account.profileName}` : 'Получать имя из MAX автоматически';
-  $('form-title').textContent = account ? 'Название аккаунта' : 'Новый аккаунт';
+  $('form-title').textContent = 'Настройки аккаунта';
   $('save').textContent = account ? 'Сохранить' : 'Добавить';
   $('account-name').value = account?.name || '';
   $('account-form').hidden = false; $('add').hidden = true;
@@ -29,6 +30,7 @@ function render(next) {
   document.body.classList.remove('loading');
   document.body.classList.toggle('locked', !!state.locked);
   $('lock-screen').hidden = !state.locked;
+  $('empty-state').hidden = !!state.locked || state.accounts?.length !== 0 || state.pane === 'settings';
   if (state.locked) {
     $('accounts').replaceChildren(); closeForm();
     const biometric = state.security.touchID && state.security.touchIDAvailable;
@@ -48,16 +50,22 @@ function render(next) {
     const row = document.createElement('div'); row.className = `account-row${account.active ? ' active' : ''}`;
     const button = document.createElement('button'); button.type = 'button'; button.className = 'account';
     button.setAttribute('aria-label', account.name);
-    button.title = `${account.name}${index < 9 ? ` · ⌘${index + 1}` : ''}`;
+    button.title = `${account.name}${index < 9 ? ` · ⌘${index + 1}` : ''} · Правый клик — настройки`;
     if (account.active) button.setAttribute('aria-current', 'page');
     const avatar = document.createElement('span'); avatar.className = `avatar tone-${index % 5}`; avatar.textContent = account.name.trim().split(/\s+/).slice(0, 2).map(part => [...part][0]).join('').toLocaleUpperCase('ru'); avatar.setAttribute('aria-hidden', 'true');
+    if (account.avatar) {
+      const image = document.createElement('img'); image.src = account.avatar; image.alt = '';
+      image.addEventListener('error', () => image.remove(), { once: true });
+      avatar.append(image);
+    }
     const label = document.createElement('span'); label.className = 'account-label';
     const name = document.createElement('span'); name.className = 'name'; name.textContent = account.name;
     const status = document.createElement('span'); status.className = 'account-status'; status.textContent = account.status === 'offline' ? 'Нет соединения' : account.status === 'loading' ? 'Подключение…' : account.notifications === false ? 'Уведомления выкл.' : 'MAX';
     label.append(name, status); button.append(avatar, label);
     button.addEventListener('click', () => action(() => window.maxwebShell.select(account.id)));
-    const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'rename'; rename.textContent = '✎'; rename.title = `Переименовать «${account.name}»`; rename.setAttribute('aria-label', rename.title);
+    const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'rename'; rename.textContent = '✎'; rename.title = `Настройки аккаунта «${account.name}»`; rename.setAttribute('aria-label', rename.title);
     rename.addEventListener('click', () => edit(account));
+    button.addEventListener('contextmenu', event => { event.preventDefault(); edit(account); });
     const mute = document.createElement('button'); mute.type = 'button'; mute.className = `account-mute${account.notifications === false ? ' is-muted' : ''}`;
     mute.title = `${account.notifications === false ? 'Включить' : 'Выключить'} системные уведомления: ${account.name}`;
     mute.setAttribute('aria-label', mute.title); mute.setAttribute('aria-pressed', String(account.notifications === false));
@@ -72,12 +80,25 @@ function render(next) {
   $('update-alert').hidden = !['available', 'downloading', 'ready'].includes(state.update.status);
   $('update-alert').textContent = state.update.status === 'ready' ? 'Обновление готово к установке ↗' : state.update.status === 'downloading' ? `Обновление · ${state.update.progress}%` : `Доступна версия ${state.update.version} ↗`;
 }
-$('add').addEventListener('click', () => edit());
+const addAccount = () => action(async () => {
+  $('add').disabled = true; $('empty-add').disabled = true;
+  try { closeForm(); render(await window.maxwebShell.add()); }
+  finally { $('add').disabled = false; $('empty-add').disabled = false; }
+});
+$('add').addEventListener('click', addAccount);
+$('empty-add').addEventListener('click', addAccount);
+$('logout-account').addEventListener('click', () => action(async () => {
+  const id = editingAccount?.id;
+  if (!id) return;
+  $('logout-account').disabled = true;
+  try { const next = await window.maxwebShell.logout(id); closeForm(); render(next); }
+  finally { $('logout-account').disabled = false; }
+}));
 $('cancel').addEventListener('click', closeForm);
 $('account-form').addEventListener('submit', async event => {
   event.preventDefault(); $('save').disabled = true;
   try {
-    const next = editing ? await window.maxwebShell.rename(editing, $('account-name').value) : await window.maxwebShell.add($('account-name').value);
+    const next = await window.maxwebShell.rename(editing, $('account-name').value);
     closeForm(); render(next);
   } catch (e) { error(e.message); }
   finally { $('save').disabled = false; }

@@ -5,7 +5,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { MAX_URL, isMaxURL, isExternalURL, mayUsePermission, unreadBadge } = require('./policy.cjs');
 const { createStore } = require('./store.cjs');
-const { newAccount, accountName, accountPartition } = require('./accounts.cjs');
+const { newAccount, accountName, accountPartition, accountAvatar } = require('./accounts.cjs');
 const { normalizeRepository } = require('./update-core.cjs');
 const { AppSecurity } = require('./security.cjs');
 const { normalizeBanner, bannerContent } = require('./notifications.cjs');
@@ -87,7 +87,7 @@ function securityChanged() {
         pending.sender.send('account:notification-event', { id: pending.notificationID, type: 'click' });
         pending.sender.send('account:notification-event', { id: pending.notificationID, type: 'close' });
       }
-    } else if (activePane === 'account') selectAccount(activeId(), false);
+    } else if (activePane === 'account' && activeId()) selectAccount(activeId(), false);
   }
 }
 function shellState() {
@@ -126,6 +126,7 @@ function showWindow() {
 function selectAccount(id, focus = true) {
   if (security.locked) { showWindow(); return shellState(); }
   if (!preferences().accounts.some(account => account.id === id)) throw new Error('Аккаунт не найден.');
+  if (loggingOut.has(id)) return shellState();
   switching = true;
   try {
     if (activeId() !== id) store.set({ activeAccountId: id });
@@ -145,6 +146,50 @@ function addAccount(name) {
   createAccountView(account);
   selectAccount(account.id);
   return shellState();
+}
+const loggingOut = new Set();
+async function logoutAccount(id) {
+  security.requireUnlocked();
+  const account = preferences().accounts.find(a => a.id === id);
+  if (!account) throw new Error('Аккаунт не найден.');
+  if (loggingOut.has(id)) return shellState();
+  loggingOut.add(id);
+  try {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'question', message: `Выйти из «${account.name}»?`,
+      detail: 'Сессия MAX на этом Mac будет удалена, а аккаунт исчезнет из боковой панели. Для повторного входа потребуется авторизация. Другие аккаунты останутся на месте.',
+      buttons: ['Отмена', 'Выйти'], defaultId: 0, cancelId: 0, noLink: true
+    });
+    security.requireUnlocked();
+    if (response !== 1) return shellState();
+    const runtime = runtimes.get(id);
+    const ses = runtime?.session || session.fromPartition(accountPartition(id));
+    clearAccountNotifications(id);
+    if (runtime) {
+      clearTimeout(runtime.retryTimer);
+      runtimes.delete(id);
+      mainWindow.contentView.removeChildView(runtime.view);
+      if (!runtime.view.webContents.isDestroyed()) runtime.view.webContents.close({ waitForBeforeUnload: false });
+    }
+    try {
+      await ses.closeAllConnections();
+      await ses.clearStorageData();
+      await ses.clearCache();
+      await ses.clearAuthCache();
+      await ses.cookies.flushStore();
+    } catch (error) {
+      if (preferences().accounts.some(a => a.id === id)) createAccountView(account);
+      layout(); broadcast();
+      throw new Error('Не удалось полностью очистить сессию. Повторите выход.', { cause: error });
+    }
+    const accounts = preferences().accounts.filter(a => a.id !== id);
+    const next = activeId() === id ? accounts[0]?.id || null : activeId();
+    store.set({ accounts, activeAccountId: next });
+    if (activePane === 'account' && next && !security.locked) selectAccount(next, false);
+    else { layout(); broadcast(); }
+    if (!accounts.length && !security.locked) { mainWindow.setTitle('Maxweb'); mainWindow.webContents.focus(); }
+    return shellState();
+  } finally { loggingOut.delete(id); }
 }
 function renameAccount(id, name) {
   security.requireUnlocked();
@@ -286,13 +331,13 @@ function createMainWindow() {
   });
   void mainWindow.loadURL(shellURL);
   for (const account of preferences().accounts) createAccountView(account);
-  selectAccount(activeId(), false);
+  if (activeId()) selectAccount(activeId(), false);
 }
 function testNotification() {
   return new Promise((resolve, reject) => {
     if (!preferences().notifications) return reject(new Error('Сначала включите уведомления в настройках Maxweb.'));
     if (!Notification.isSupported()) return reject(new Error('Уведомления недоступны в этой системе.'));
-    const account = preferences().accounts.find(a => a.id === activeId());
+    const account = preferences().accounts.find(a => a.id === activeId()) || { name: 'Аккаунт MAX' };
     const notification = new Notification({ ...bannerContent(account, 'Отправитель MAX', 'Так будет выглядеть текст нового сообщения.', preferences().banner, security.locked) });
     activeNotifications.add(notification);
     let settled = false;
@@ -302,7 +347,7 @@ function testNotification() {
       activeNotifications.delete(notification);
       if (!settled) { settled = true; clearTimeout(timeout); reject(new Error(message || 'macOS не разрешила уведомление.')); }
     });
-    notification.on('click', () => selectAccount(account.id));
+    notification.on('click', () => { if (preferences().accounts.some(a => a.id === account.id)) selectAccount(account.id); else showSettings(); });
     notification.on('close', () => activeNotifications.delete(notification));
     notification.show();
   });
@@ -318,13 +363,15 @@ function bindIPC() {
   ipcMain.on('app:activity', event => {
     if (senderAccount(event) || trusted(mainWindow?.webContents, shellURL, event) || trusted(settingsView?.webContents, settingsURL, event)) security.activity();
   });
-  ipcMain.on('account:profile', (event, name) => {
+  ipcMain.on('account:profile', (event, profile) => {
     const id = senderAccount(event);
-    if (!id) return;
-    try { name = accountName(name); } catch { return; }
+    if (!id || !profile || typeof profile !== 'object') return;
+    let name;
+    try { name = accountName(profile.name); } catch { return; }
+    const avatar = accountAvatar(profile.avatar);
     const account = preferences().accounts.find(a => a.id === id);
-    if (!account || account.profileName === name) return;
-    store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, profileName: name, ...(!a.customName ? { name } : {}) } : a) });
+    if (!account || account.profileName === name && (account.avatar || '') === avatar) return;
+    store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, profileName: name, avatar, ...(!a.customName ? { name } : {}) } : a) });
     if (id === activeId() && !security.locked && activePane === 'account') mainWindow.setTitle(`${preferences().accounts.find(a => a.id === id).name} — MAX`);
     broadcast();
   });
@@ -378,6 +425,7 @@ function bindIPC() {
   });
   handle('accounts:select', 'shell', selectAccount);
   handle('accounts:add', 'shell', addAccount);
+  handle('accounts:logout', 'shell', logoutAccount);
   handle('accounts:rename', 'shell', renameAccount);
   handle('accounts:notifications', 'shell', (id, enabled) => {
     if (typeof enabled !== 'boolean' || !preferences().accounts.some(a => a.id === id)) throw new Error('Неверные настройки аккаунта.');
@@ -414,7 +462,10 @@ function bindIPC() {
   });
   handle('settings:test', 'settings', testNotification);
   handle('settings:system', 'settings', () => shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension'));
-  handle('settings:open', 'settings', () => { selectAccount(activeId()); });
+  handle('settings:open', 'settings', () => {
+    if (activeId()) return selectAccount(activeId());
+    activePane = 'account'; layout(); broadcast(); mainWindow.setTitle('Maxweb'); mainWindow.webContents.focus();
+  });
   handle('updates:configure', 'settings', (repository, autoCheck) => {
     if (typeof autoCheck !== 'boolean' || typeof repository !== 'string') throw new Error('Неверные настройки обновлений.');
     if (updater.busy || updater.installing) throw new Error('Дождитесь завершения обновления.');
@@ -470,6 +521,7 @@ function createMenu() {
 }
 function cycleAccount(direction) {
   const accounts = preferences().accounts;
+  if (!accounts.length) return;
   const index = accounts.findIndex(a => a.id === activeId());
   selectAccount(accounts[(index + direction + accounts.length) % accounts.length].id);
 }

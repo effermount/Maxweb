@@ -22,6 +22,7 @@ function createStore(directory) {
     data.security = normalizeSecurity(saved.security);
     data.sidebarCollapsed = saved.sidebarCollapsed === true;
     data.accounts = normalizeAccounts(saved.accounts);
+    data.activeAccountId = data.accounts[0]?.id || null;
     if (data.accounts.some(a => a.id === saved.activeAccountId)) data.activeAccountId = saved.activeAccountId;
     if (saved.updates && typeof saved.updates === 'object') {
       if (typeof saved.updates.repository === 'string' && (saved.updates.repository.trim() || saved.updates.userConfigured === true)) data.updates.repository = saved.updates.repository;

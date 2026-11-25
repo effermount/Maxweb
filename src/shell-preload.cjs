@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('maxwebShell', {
   touchID: () => ipcRenderer.invoke('security:touch-id'),
   get: () => ipcRenderer.invoke('shell:get'),
   select: id => ipcRenderer.invoke('accounts:select', id),
+  logout: id => ipcRenderer.invoke('accounts:logout', id),
   add: name => ipcRenderer.invoke('accounts:add', name),
   rename: (id, name) => ipcRenderer.invoke('accounts:rename', id, name),
   settings: () => ipcRenderer.invoke('shell:settings'),
