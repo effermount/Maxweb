@@ -1,7 +1,7 @@
 {
   "name": "maxweb",
   "productName": "Maxweb",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Клиент MAX и Telegram на Mac с Apple Silicon",
   "private": true,
   "main": "src/main.cjs",

@@ -56,9 +56,8 @@ form button.accent { background: var(--accent); color: white; }
 .collapsed .collapse-chevron { transform: rotate(180deg); }
 .collapsed .brand, .collapsed .section-heading, .collapsed .account-label, .collapsed .rename,
 .collapsed .background-note, .collapsed footer, .collapsed .settings span:nth-child(2), .collapsed .add-label, .collapsed #update-alert { display: none; }
-.collapsed .account { width: 100%; padding: 8px 22px 8px 0; min-height: 60px; }
-.collapsed .avatar { width: 30px; height: 30px; border-radius: 10px; }
-.collapsed .badge { left: 0; top: 0; }
+.collapsed .account { width: 100%; padding: 9px; min-height: 52px; }
+.collapsed .badge { left: 25px; top: 0; }
 .collapsed .add, .collapsed .settings { justify-content: center; padding: 12px 0; }
 .collapsed .settings span:first-child { font-size: 22px; }
 .collapsed nav { min-height: 52px; }
@@ -98,7 +97,7 @@ form button.accent { background: var(--accent); color: white; }
 .account-mute .mute-slash { display: none; }
 .account-mute.is-muted { color: var(--accent-text); }
 .account-mute.is-muted .mute-slash { display: block; }
-.collapsed .account-mute { position: absolute; right: 0; bottom: 6px; width: 20px; height: 20px; padding: 2px; border: 2px solid var(--sidebar); background: var(--sidebar); border-radius: 7px; }
+.collapsed .account-mute { position: absolute; left: 0; bottom: 0; width: 22px; height: 22px; padding: 2px; border: 2px solid var(--sidebar); background: var(--sidebar); border-radius: 7px; }
 .collapsed .account-mute svg { width: 14px; height: 14px; }
 .collapsed .account-mute:hover { background: var(--hover); }
 
@@ -126,4 +125,4 @@ form button.accent { background: var(--accent); color: white; }
 .service-mark { flex-shrink: 0; width: 14px; height: 14px; display: grid; place-items: center; border-radius: 4px; color: white; background: #353d8b; font-size: 9px; z-index: 1; }
 .service-mark svg { width: 11px; fill: currentColor; }
 
-.collapsed .service-mark { position: absolute; right: 3px; top: 6px; }
+.collapsed .service-mark { position: absolute; right: 0; bottom: 1px; }
