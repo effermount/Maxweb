@@ -64,11 +64,10 @@ function render(next) {
     serviceMark.title = serviceName(account); serviceMark.setAttribute('aria-hidden', 'true');
     if (account.service === 'telegram') serviceMark.innerHTML = '<svg viewBox="0 0 24 24"><path d="m3 11 17-7-4 16-5-5 5-6-7 5-6-3Z"/></svg>';
     else serviceMark.textContent = 'M';
-    avatar.append(serviceMark);
     const label = document.createElement('span'); label.className = 'account-label';
     const name = document.createElement('span'); name.className = 'name'; name.textContent = account.name;
     const status = document.createElement('span'); status.className = 'account-status'; status.textContent = account.status === 'offline' ? 'Нет соединения' : account.status === 'loading' ? 'Подключение…' : account.notifications === false ? 'Уведомления выкл.' : serviceName(account);
-    label.append(name, status); button.append(avatar, label);
+    label.append(name, status); button.append(avatar, label, serviceMark);
     button.addEventListener('click', () => action(() => window.maxwebShell.select(account.id)));
     const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'rename'; rename.textContent = '✎'; rename.title = `Настройки аккаунта «${account.name}»`; rename.setAttribute('aria-label', rename.title);
     rename.addEventListener('click', () => edit(account));
