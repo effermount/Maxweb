@@ -11,12 +11,13 @@ client.ready.then(async()=>{
  client.renameAccount('default','Алексей Кузнецов');
  const telegramID=client.addAccount('Анна Сергеевна','telegram').activeAccountId;
  client.addAccount('Андрей Смирнов','whatsapp');
+ client.addAccount('Виктор Ковалёв','vk');
  const js=code=>shell.executeJavaScript(code);
  await js(`window.maxwebShell.notifications("${telegramID}",false)`);
  const qa=path.join(__dirname,'../.tools/qa');fs.mkdirSync(qa,{recursive:true});
  for(const collapsed of [true,false]){
   await js(`window.maxwebShell.collapse(${collapsed})`);
-  await wait(()=>js('document.querySelectorAll(".badge").length===3'));
+  await wait(()=>js('document.querySelectorAll(".badge").length===4'));
   await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   const geometry=await js(`Array.from(document.querySelectorAll('.account-row'),row=>{
    const rect=selector=>{const r=row.querySelector(selector).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}};
@@ -47,7 +48,7 @@ client.ready.then(async()=>{
   await js(`window.maxwebShell.select("${telegramID}")`);
   await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   assert.equal(await js('document.querySelector("nav").scrollWidth>document.querySelector("nav").clientWidth'),false,'Sidebar must not scroll horizontally');
-  fs.writeFileSync(path.join(qa,`sidebar-messenger-${collapsed?'collapsed':'expanded'}.png`),(await shell.capturePage({x:0,y:0,width:collapsed?72:220,height:320})).toPNG());
+  fs.writeFileSync(path.join(qa,`sidebar-messenger-${collapsed?'collapsed':'expanded'}.png`),(await shell.capturePage({x:0,y:0,width:collapsed?72:220,height:370})).toPNG());
  }
  await js('window.maxwebShell.collapse(true)');await js('document.querySelector(".account-mute").click()');
  await wait(()=>client.getState().accounts[0].notifications===false);

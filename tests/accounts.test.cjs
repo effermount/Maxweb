@@ -88,3 +88,16 @@ test('WhatsApp sessions persist in their own partition and cannot reuse the lega
   assert.throws(() => accountPartition('default', 'whatsapp'));
   assert.deepEqual(normalizeAccounts([{ id: 'default', name: 'Invalid', service: 'whatsapp' }]), []);
 });
+
+test('VK accounts persist independently and cannot replace the original MAX partition', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-vk-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const store = createStore(dir), vk = newAccount(undefined, 'vk');
+  store.set({ accounts: [...store.get().accounts, vk], activeAccountId: vk.id });
+  const restored = createStore(dir).get();
+  assert.equal(restored.accounts[1].service, 'vk'); assert.equal(restored.activeAccountId, vk.id);
+  assert.equal(accountPartition(vk.id, 'vk'), `persist:vk-${vk.id}`);
+  for (const service of ['max','telegram','whatsapp']) assert.notEqual(accountPartition(vk.id, 'vk'), accountPartition(vk.id, service));
+  assert.throws(() => accountPartition('default', 'vk'));
+  assert.deepEqual(normalizeAccounts([{ id: 'default', name: 'Invalid', service: 'vk' }]), []);
+});

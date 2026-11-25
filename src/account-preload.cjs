@@ -1,6 +1,6 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
-if (['https://web.max.ru', 'https://web.telegram.org', 'https://web.whatsapp.com'].includes(location.origin)) {
+if (['https://web.max.ru', 'https://web.telegram.org', 'https://web.whatsapp.com', 'https://web.vk.me'].includes(location.origin)) {
   contextBridge.exposeInMainWorld('__maxwebNotifications', {
     send: request => ipcRenderer.send('account:notification', request),
     onEvent: callback => ipcRenderer.on('account:notification-event', (_event, value) => callback(value))
@@ -366,5 +366,57 @@ if (location.origin === 'https://web.whatsapp.com') {
       finally { busy = false; }
     }
     void syncWhatsAppProfile(); setInterval(syncWhatsAppProfile, 5000);
+  } });
+}
+
+if (location.origin === 'https://web.vk.me') {
+  contextBridge.exposeInMainWorld('__maxwebProfile', {
+    send: profile => ipcRenderer.send('account:profile', profile)
+  });
+  contextBridge.executeInMainWorld({ func: () => {
+    let busy = false, lastProfile = '', imageSource = '', image = '';
+    function publish(name) { const profile=JSON.stringify({name,avatar:image});if(profile!==lastProfile){lastProfile=profile;window.__maxwebProfile.send({name,avatar:image});} }
+    const selfLabels = ['Мой профиль', 'Моя страница', 'Мой аккаунт', 'My profile', 'Your profile', 'My account'];
+    async function syncVKProfile() {
+      if (busy) return;
+      busy = true;
+      try {
+        // Read only an explicitly labelled own-profile control. Never infer the
+        // owner from a chat header, contact list, messages or session credentials.
+        const own = selfLabels.map(label => document.querySelector(`button[aria-label="${label}"], a[aria-label="${label}"]`)).find(Boolean);
+        if (!own) return;
+        const photo = own.querySelector('img');
+        const name = (own.getAttribute('data-name') || photo?.alt || '').trim().slice(0,40);
+        if (!name || selfLabels.includes(name) || /^(аватар|фото|profile|avatar)/i.test(name) || /[\x00-\x1f\x7f]/.test(name)) return;
+        publish(name);
+        const source = photo?.currentSrc || photo?.src || '';
+        if (source !== imageSource) {
+          if (!source) { image = ''; imageSource = ''; }
+          else {
+            const url = new URL(source, location.href);
+            const local = url.protocol === 'blob:' && url.origin === location.origin;
+            const remote = url.protocol === 'https:' && !url.username && !url.password && /(^|\.)(vk\.me|vk\.ru|vk\.com|userapi\.com|vkuserphoto\.ru|vkuserphoto\.com)$/.test(url.hostname);
+            if (!local && !remote) return;
+            const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
+            if (!response.ok || Number(response.headers.get('content-length')) > 2*1024*1024) return;
+            const reader=response.body.getReader(), chunks=[];let size=0;
+            try { while(true) { const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>2*1024*1024){await reader.cancel();return;}chunks.push(value); } }
+            finally { reader.releaseLock(); }
+            const bitmap=await createImageBitmap(new Blob(chunks));
+            try {
+              const canvas=document.createElement('canvas');canvas.width=canvas.height=64;
+              const edge=Math.min(bitmap.width,bitmap.height);
+              canvas.getContext('2d').drawImage(bitmap,(bitmap.width-edge)/2,(bitmap.height-edge)/2,edge,edge,0,0,64,64);
+              image=canvas.toDataURL('image/png');imageSource=source;
+            } finally { bitmap.close(); }
+          }
+        }
+        // The DOM may have changed while the avatar was loading.
+        if (!own.isConnected || (own.getAttribute('data-name') || own.querySelector('img')?.alt || '').trim().slice(0,40) !== name) return;
+        publish(name);
+      } catch { /* Keep the saved name/avatar when VK does not expose its own profile in the UI. */ }
+      finally { busy=false; }
+    }
+    void syncVKProfile();setInterval(syncVKProfile,5000);
   } });
 }

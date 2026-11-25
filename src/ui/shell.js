@@ -9,7 +9,7 @@ function maybeAutoTouchID() {
 }
 window.addEventListener('focus', maybeAutoTouchID);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') autoTouchAttempted = false; else maybeAutoTouchID(); });
-const serviceName = account => ({ max: 'MAX', telegram: 'Telegram', whatsapp: 'WhatsApp' })[account?.service || 'max'];
+const serviceName = account => ({ max: 'MAX', telegram: 'Telegram', whatsapp: 'WhatsApp', vk: 'VK Мессенджер' })[account?.service || 'max'];
 const error = message => { $('error').textContent = message; };
 const action = async operation => { try { error(''); return await operation(); } catch (e) { error(e.message); } };
 function edit(account = null) {
@@ -65,6 +65,7 @@ function render(next) {
     serviceMark.title = serviceName(account); serviceMark.setAttribute('aria-hidden', 'true');
     if (account.service === 'telegram') serviceMark.innerHTML = '<svg viewBox="0 0 24 24"><path d="m3 11 17-7-4 16-5-5 5-6-7 5-6-3Z"/></svg>';
     else if (account.service === 'whatsapp') serviceMark.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-11.8 7L4 20l1.4-4.2A8 8 0 1 1 20 11.5Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7c0 5 4 8 8 8l1-2-3-1-1 1-3-3 1-1-1-3Z"/></svg>';
+    else if (account.service === 'vk') serviceMark.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 5h4c.2 5 1.5 8 3 8V5h4v5c1.6-.5 3.4-3 4-5h4c-.7 3-2.7 5.5-4.5 7 2 1.3 4.2 4 4.8 7H18c-.7-2-2.5-4-4-4v4h-2C6 19 3 14 3 5Z"/></svg>';
     else serviceMark.textContent = 'M';
     const label = document.createElement('span'); label.className = 'account-label';
     const name = document.createElement('span'); name.className = 'name'; name.textContent = account.name;

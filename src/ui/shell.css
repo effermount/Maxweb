@@ -130,3 +130,5 @@ form button.accent { background: var(--accent); color: white; }
 .collapsed .service-mark svg { width: 12px; }
 
 .whatsapp-icon, .service-mark.whatsapp { background: #168b58; }
+
+.vk-icon, .service-mark.vk { background: #087bfa; }

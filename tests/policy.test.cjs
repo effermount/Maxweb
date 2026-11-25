@@ -54,3 +54,17 @@ test('WhatsApp origin, requesting frames and permissions are isolated', () => {
   assert.equal(mayUsePermission('media', 'https://web.telegram.org', 'https://web.whatsapp.com/', true, 'whatsapp'), false);
   assert.equal(mayUsePermission('media', 'https://web.whatsapp.com', 'file:///settings.html', true, 'whatsapp'), false);
 });
+
+test('VK separates messenger navigation, VK ID login and application permissions', () => {
+  const { isVKURL, isServiceAuthURL, isServiceNavigationURL } = require('../src/policy.cjs');
+  assert.ok(isVKURL('https://web.vk.me/'));
+  for (const url of ['https://id.vk.ru/auth', 'https://id.vk.com/auth', 'https://login.vk.ru/', 'https://oauth.vk.ru/']) {
+    assert.equal(isVKURL(url), false); assert.ok(isServiceAuthURL(url, 'vk')); assert.ok(isServiceNavigationURL(url, 'vk'));
+    assert.equal(mayUsePermission('media', url, url, true, 'vk'), false);
+    assert.equal(isServiceNavigationURL(url, 'telegram'), false);
+  }
+  for (const url of ['https://id.vk.ru.evil.test/', 'https://id.vk.ru@evil.test/', 'https://evil@id.vk.ru/', 'http://id.vk.ru/', 'https://id.vk.ru:444/', 'https://evil.test/?id.vk.ru', 'file:///tmp/login']) assert.equal(isServiceNavigationURL(url, 'vk'), false);
+  assert.ok(mayUsePermission('notifications', 'https://web.vk.me', 'https://web.vk.me/', true, 'vk'));
+  assert.equal(mayUsePermission('notifications', 'https://id.vk.ru', 'https://web.vk.me/', true, 'vk'), false);
+  assert.equal(mayUsePermission('media', 'https://web.vk.me', 'https://web.telegram.org/k/', true, 'vk'), false);
+});

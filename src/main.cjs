@@ -3,7 +3,7 @@ const { app, BrowserWindow, WebContentsView, Menu, Tray, nativeImage, session, s
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { isServiceURL, isExternalURL, mayUsePermission, unreadBadge } = require('./policy.cjs');
+const { isServiceURL, isServiceAuthURL, isServiceNavigationURL, isExternalURL, mayUsePermission, unreadBadge } = require('./policy.cjs');
 const { serviceInfo } = require('./services.cjs');
 const { createStore } = require('./store.cjs');
 const { newAccount, accountName, accountPartition, accountAvatar } = require('./accounts.cjs');
@@ -19,8 +19,9 @@ const settingsURL = uiURL('settings');
 const offlineURL = uiURL('offline');
 const telegramOfflineURL = uiURL('offline-telegram');
 const whatsappOfflineURL = uiURL('offline-whatsapp');
-const offlineFor = service => service === 'whatsapp' ? whatsappOfflineURL : service === 'telegram' ? telegramOfflineURL : offlineURL;
-const isOfflineURL = url => [offlineURL, telegramOfflineURL, whatsappOfflineURL].includes(url);
+const vkOfflineURL = uiURL('offline-vk');
+const offlineFor = service => service === 'vk' ? vkOfflineURL : service === 'whatsapp' ? whatsappOfflineURL : service === 'telegram' ? telegramOfflineURL : offlineURL;
+const isOfflineURL = url => [offlineURL, telegramOfflineURL, whatsappOfflineURL, vkOfflineURL].includes(url);
 
 app.setName('Maxweb');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -31,6 +32,11 @@ let mainWindow, settingsView, tray, store, updater, security;
 let quitting = false, switching = false, activePane = 'account';
 let autoCheckTimer, initialCheckTimer, cleanupTimer, idleTimer;
 const runtimes = new Map();
+const authWindows = new Map();
+function closeAuthWindows(id) {
+  for (const [owner, windows] of authWindows) if (id === undefined || owner === id) for (const window of [...windows]) if (!window.isDestroyed()) window.destroy();
+}
+const isAuthContents = contents => [...authWindows.values()].some(windows => [...windows].some(window => !window.isDestroyed() && window.webContents === contents));
 const activeNotifications = new Set();
 const accountNotifications = new Map();
 const sidebarWidth = () => preferences().sidebarCollapsed ? 72 : SIDEBAR;
@@ -81,7 +87,7 @@ function clearNotifications() {
 }
 function securityChanged() {
   if (security.locked) {
-    clearNotifications();
+    clearNotifications(); closeAuthWindows();
     if (settingsView && !settingsView.webContents.isDestroyed()) settingsView.webContents.send('security:locked');
     mainWindow?.setTitle('Maxweb — заблокировано');
     mainWindow?.webContents.focus();
@@ -172,7 +178,7 @@ async function logoutAccount(id) {
     if (response !== 1) return shellState();
     const runtime = runtimes.get(id);
     const ses = runtime?.session || session.fromPartition(accountPartition(id, account.service));
-    clearAccountNotifications(id);
+    clearAccountNotifications(id); closeAuthWindows(id);
     if (runtime) {
       clearTimeout(runtime.retryTimer);
       runtimes.delete(id);
@@ -208,12 +214,29 @@ function renameAccount(id, name) {
 }
 function external(url) { if (isExternalURL(url)) void shell.openExternal(url).catch(() => {}); }
 function secureNavigation(contents, id) {
+  const service = preferences().accounts.find(a => a.id === id)?.service;
   contents.setWindowOpenHandler(({ url }) => {
+    if (service === 'vk' && (isServiceAuthURL(url, service) || url === 'about:blank')) {
+      if (security.locked || loggingOut.has(id)) return { action: 'deny' };
+      return { action: 'allow', outlivesOpener: false, overrideBrowserWindowOptions: {
+        parent: mainWindow, width: 500, height: 720, autoHideMenuBar: true,
+        webPreferences: { session: contents.session, preload: path.join(__dirname, 'account-preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true }
+      } };
+    }
     if (accountURL(url, id)) { if (!security.locked) { selectAccount(id); void contents.loadURL(url).catch(() => {}); } }
     else external(url);
     return { action: 'deny' };
   });
-  const guard = event => { if (!accountURL(event.url, id)) { event.preventDefault(); external(event.url); } };
+  contents.on('did-create-window', child => {
+    const windows = authWindows.get(id) || new Set(); windows.add(child); authWindows.set(id, windows);
+    child.on('closed', () => { windows.delete(child); if (!windows.size) authWindows.delete(id); });
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    const guard = event => { if (!isServiceNavigationURL(event.url, service)) { event.preventDefault(); external(event.url); } };
+    child.webContents.on('will-navigate', guard); child.webContents.on('will-redirect', guard);
+    child.webContents.on('will-attach-webview', event => event.preventDefault());
+    if (security.locked || loggingOut.has(id) || !runtimes.has(id)) child.destroy();
+  });
+  const guard = event => { if (!isServiceNavigationURL(event.url, service)) { event.preventDefault(); external(event.url); } };
   contents.on('will-navigate', guard);
   contents.on('will-redirect', guard);
   contents.on('will-attach-webview', event => event.preventDefault());
@@ -222,9 +245,9 @@ function configureSession(ses, service = 'max') {
   const userAgent = service === 'whatsapp' ? ses.getUserAgent().replace(/\s(?:Electron|Maxweb)\/[\w.-]+/g, '') : ses.getUserAgent();
   ses.setUserAgent(userAgent, 'ru-RU,ru,en-US,en');
   const topURL = contents => contents && !contents.isDestroyed() ? contents.getURL() : '';
-  ses.setPermissionCheckHandler((contents, permission, origin) => mayUsePermission(permission, origin, topURL(contents), preferences().notifications, service));
+  ses.setPermissionCheckHandler((contents, permission, origin) => !isAuthContents(contents) && mayUsePermission(permission, origin, topURL(contents), preferences().notifications, service));
   ses.setPermissionRequestHandler(async (contents, permission, callback, details) => {
-    if (!mayUsePermission(permission, details.requestingUrl, topURL(contents), preferences().notifications, service)) return callback(false);
+    if (isAuthContents(contents) || !mayUsePermission(permission, details.requestingUrl, topURL(contents), preferences().notifications, service)) return callback(false);
     if (permission === 'media') {
       try {
         for (const type of details.mediaTypes || []) {
@@ -276,7 +299,7 @@ function createAccountView(account) {
     runtime.status = isOfflineURL(contents.getURL()) ? 'offline' : 'ready'; broadcast();
   });
   contents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
-    if (!isMainFrame || code === -3 || !accountURL(url, account.id) || quitting) return;
+    if (!isMainFrame || code === -3 || !isServiceNavigationURL(url, account.service) || quitting) return;
     clearTimeout(runtime.retryTimer);
     void contents.loadURL(offlineFor(account.service)).then(() => {
       runtime.status = 'offline'; broadcast();
@@ -371,7 +394,8 @@ function bindIPC() {
     for (const [id, runtime] of runtimes) if (runtime.view.webContents === event.sender && accountURL(event.senderFrame.url, id)) return id;
   };
   ipcMain.on('app:activity', event => {
-    if (senderAccount(event) || trusted(mainWindow?.webContents, shellURL, event) || trusted(settingsView?.webContents, settingsURL, event)) security.activity();
+    const authActivity = event.senderFrame === event.sender.mainFrame && [...authWindows].some(([id, windows]) => [...windows].some(window => !window.isDestroyed() && window.webContents === event.sender && isServiceNavigationURL(event.senderFrame.url, preferences().accounts.find(a => a.id === id)?.service)));
+    if (senderAccount(event) || authActivity || trusted(mainWindow?.webContents, shellURL, event) || trusted(settingsView?.webContents, settingsURL, event)) security.activity();
   });
   ipcMain.on('account:profile', (event, profile) => {
     const id = senderAccount(event);
@@ -494,7 +518,7 @@ function createMenu() {
   const notificationTest = () => testNotification().catch(error => dialog.showMessageBox({ type: 'warning', message: 'Не удалось показать уведомление', detail: error.message }));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Maxweb', submenu: [
-      { label: 'О Maxweb', click: () => dialog.showMessageBox({ type: 'info', message: `Maxweb ${APP_VERSION}`, detail: 'Независимый клиент MAX, Telegram и WhatsApp для Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
+      { label: 'О Maxweb', click: () => dialog.showMessageBox({ type: 'info', message: `Maxweb ${APP_VERSION}`, detail: 'Независимый клиент MAX, Telegram, WhatsApp и VK для Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
       { label: 'Проверить обновления…', click: checkUpdates },
       { label: 'Заблокировать Maxweb', accelerator: 'CmdOrCtrl+L', click: () => security.lock() },
       { label: 'Настройки…', accelerator: 'CmdOrCtrl+,', click: showSettings },
@@ -605,5 +629,6 @@ module.exports = {
   getMainWindow: () => mainWindow, getSession: (id = activeId()) => runtimes.get(id)?.session,
   getAccountContents: (id = activeId()) => runtimes.get(id)?.view.webContents,
   getAccountNotifications: () => accountNotifications,
+  getAuthWindows: id => [...(authWindows.get(id) || [])],
   getState: shellState, getSecurity: () => security, getUpdater: () => updater
 };
