@@ -1,6 +1,6 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
-if (location.origin === 'https://web.max.ru') {
+if (['https://web.max.ru', 'https://web.telegram.org'].includes(location.origin)) {
   contextBridge.exposeInMainWorld('__maxwebNotifications', {
     send: request => ipcRenderer.send('account:notification', request),
     onEvent: callback => ipcRenderer.on('account:notification-event', (_event, value) => callback(value))
@@ -44,6 +44,8 @@ if (location.origin === 'https://web.max.ru') {
     });
     window.Notification = DesktopNotification;
   } });
+}
+if (location.origin === 'https://web.max.ru') {
   // MAX stores its own profile under viewer['']. Read only that record;
   // do not scan contacts, messages, cookies or authentication records.
   let readingProfile = false, lastProfile = '', lastAvatarURL = '', avatar = '', avatarRetryAt = 0;
@@ -124,13 +126,15 @@ if (location.origin === 'https://web.max.ru') {
   let intent = null;
   let followUntil = 0;
   let followPath = '';
+  let followFrame = 0;
+  const bottomSpacers = new WeakMap();
   const composerSelector = '[data-testid="composer"]';
   const outgoingSelector = '.message--isOut';
   const editorFor = composer => composer?.querySelector('[contenteditable]:not([contenteditable="false"]), textarea, [role="textbox"]');
   const hasDraft = editor => !!editor && (typeof editor.value === 'string' ? editor.value.trim().length > 0 : editor.textContent.trim().length > 0);
   function scopeFor(composer) {
     for (let node = composer?.parentElement; node && node !== document.body; node = node.parentElement) {
-      if (node.querySelector('button.scrollButton') || node.querySelector(outgoingSelector)) return node;
+      if (node.querySelector('.message')) return node;
     }
     return document.body;
   }
@@ -141,27 +145,57 @@ if (location.origin === 'https://web.max.ru') {
     const known = new WeakSet(scope.querySelectorAll(outgoingSelector));
     intent = { composer, editor: editorFor(composer), hadDraft: hasDraft(editorFor(composer)), known, path: location.pathname, expires: Date.now() + 15000 };
   }
+  function revealSentMessage() {
+    if (Date.now() > followUntil || location.pathname !== followPath || document.visibilityState === 'hidden') return;
+    const composer = document.querySelector(composerSelector);
+    const latest = [...scopeFor(composer).querySelectorAll(outgoingSelector)].at(-1);
+    if (!composer || !latest?.getClientRects().length) return;
+    let scroller = latest.parentElement;
+    while (scroller && !(scroller.scrollHeight > scroller.clientHeight + 1 && /auto|scroll|hidden|overlay/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+    if (!scroller) { latest.scrollIntoView({ block: 'end', behavior: 'instant' }); return; }
+    // MAX's floating composer overlaps the history viewport. Reserve actual
+    // scrollable space, so aligning the final bubble cannot leave it underneath.
+    const overlap = Math.max(0, scroller.getBoundingClientRect().bottom - composer.getBoundingClientRect().top + 12);
+    let spacer = bottomSpacers.get(scroller);
+    if (overlap > 0) {
+      if (!spacer) {
+        spacer = document.createElement('div'); spacer.setAttribute('aria-hidden', 'true');
+        spacer.dataset.maxwebScrollSpacer = ''; bottomSpacers.set(scroller, spacer);
+      }
+      if (spacer.parentElement !== scroller) scroller.append(spacer);
+      const height = `${Math.ceil(overlap)}px`;
+      if (spacer.style.height !== height) {
+        spacer.style.cssText = `height:${height};min-height:${height};flex:0 0 ${height};pointer-events:none;overflow-anchor:none`;
+      }
+    } else if (spacer?.isConnected) spacer.remove();
+    latest.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    const bottom = Math.min(scroller.getBoundingClientRect().bottom, composer.getBoundingClientRect().top) - 12;
+    const covered = latest.getBoundingClientRect().bottom - bottom;
+    if (covered > 0) scroller.scrollTop += covered;
+  }
+  function scheduleReveal() {
+    if (followFrame || Date.now() > followUntil) return;
+    followFrame = requestAnimationFrame(() => { followFrame = 0; revealSentMessage(); });
+  }
   function jumpToLatest() {
     if (Date.now() > followUntil || location.pathname !== followPath || document.visibilityState === 'hidden') return;
     const composer = document.querySelector(composerSelector);
     const scope = scopeFor(composer);
-    const bottom = [...scope.querySelectorAll('button.scrollButton')].find(button => !button.disabled && button.getClientRects().length);
-    if (bottom) {
-      // MAX's own jump handles its virtualized history and loading the newest page.
-      bottom.click();
-      return;
-    }
-    const latest = [...scope.querySelectorAll(outgoingSelector)].at(-1);
-    if (latest?.getClientRects().length) latest.scrollIntoView({ block: 'end', behavior: 'instant' });
+    const bottom = [...scope.querySelectorAll('button.scrollButton, .scrollButtonContainer button')].find(button => {
+      const label = `${button.getAttribute('aria-label') || ''} ${button.getAttribute('title') || ''}`;
+      return !button.disabled && button.getClientRects().length && /вниз|концу (?:чата|истории)|последним сообщениям|bottom|latest messages|scroll down/i.test(label) && !/упомин|реакци|mention|reaction/i.test(label);
+    });
+    if (bottom) bottom.click();
+    revealSentMessage(); scheduleReveal();
   }
   function accepted() {
     followPath = intent.path;
     intent = null;
-    followUntil = Date.now() + 1600;
-    for (const delay of [0, 120, 350, 800, 1500]) setTimeout(jumpToLatest, delay);
+    followUntil = Date.now() + 4000;
+    for (const delay of [0, 120, 350, 800, 1500, 3000]) setTimeout(jumpToLatest, delay);
   }
   function inspect() {
-    if (!intent) return;
+    if (!intent) { if (Date.now() < followUntil) scheduleReveal(); return; }
     if (Date.now() > intent.expires || location.pathname !== intent.path || document.visibilityState === 'hidden') { intent = null; return; }
     const composer = intent.composer.isConnected ? intent.composer : document.querySelector(composerSelector);
     const editor = editorFor(composer);
@@ -186,7 +220,71 @@ if (location.origin === 'https://web.max.ru') {
   for (const type of ['wheel', 'touchmove']) document.addEventListener(type, () => { intent = null; followUntil = 0; }, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { intent = null; followUntil = 0; } });
   function observe() {
+    const composer = document.querySelector(composerSelector);
+    if (composer) new ResizeObserver(scheduleReveal).observe(composer);
     new MutationObserver(inspect).observe(document.body, { childList: true, subtree: true, characterData: true });
   }
   if (document.body) observe(); else document.addEventListener('DOMContentLoaded', observe, { once: true });
+}
+
+
+if (location.origin === 'https://web.telegram.org') {
+  contextBridge.exposeInMainWorld('__maxwebProfile', {
+    send: profile => ipcRenderer.send('account:profile', profile)
+  });
+  contextBridge.executeInMainWorld({ func: () => {
+    let busy = false, lastProfile = '', avatarKey = '', avatar = '';
+    const bounded = async operation => {
+      let timer;
+      try { return await Promise.race([operation, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Profile timeout')), 6000); })]); }
+      finally { clearTimeout(timer); }
+    };
+    function publish(name, image) {
+      const profile = JSON.stringify({ name, avatar: image });
+      if (profile !== lastProfile) { lastProfile = profile; window.__maxwebProfile.send({ name, avatar: image }); }
+    }
+    async function syncTelegramProfile() {
+      if (busy) return;
+      busy = true;
+      try {
+        const root = window.rootScope;
+        const managers = root?.managers;
+        if (!root?.myId || !managers?.appUsersManager) return;
+        // getSelf reads the signed-in user's record, not the contact list.
+        const user = await bounded(managers.appUsersManager.getSelf());
+        if (!user || String(user.id) !== String(root.myId)) return;
+        const name = [user.first_name, user.last_name].filter(value => typeof value === 'string' && value.trim()).join(' ').trim().slice(0, 40);
+        if (!name || /[\x00-\x1f\x7f]/.test(name)) return;
+        const key = `${user.id}:${user.photo?.photo_id || ''}`;
+        if (key !== avatarKey) {
+          avatar = '';
+          publish(name, '');
+          if (user.photo?._ === 'userProfilePhoto') {
+            const url = await bounded(managers.appAvatarsManager.loadAvatar(root.myId, user.photo, 'photo_small'));
+            // Web K returns a local object URL for the downloaded own avatar.
+            if (typeof url === 'string' && url.startsWith('blob:')) {
+              const response = await fetch(url);
+              const blob = await response.blob();
+              if (blob.size <= 2 * 1024 * 1024) {
+                const bitmap = await createImageBitmap(blob);
+                try {
+                  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+                  const edge = Math.min(bitmap.width, bitmap.height);
+                  canvas.getContext('2d').drawImage(bitmap, (bitmap.width - edge) / 2, (bitmap.height - edge) / 2, edge, edge, 0, 0, 64, 64);
+                  avatar = canvas.toDataURL('image/png');
+                } finally { bitmap.close(); }
+              }
+            }
+          }
+          avatarKey = key;
+        }
+        // A Telegram account switch during an asynchronous photo load must not
+        // attach the previous identity to the newly selected account.
+        if (String(root.myId) !== String(user.id)) return;
+        publish(name, avatar);
+      } catch { /* Keep the last known profile if Telegram changes its internals. */ }
+      finally { busy = false; }
+    }
+    void syncTelegramProfile(); setInterval(syncTelegramProfile, 5000);
+  } });
 }

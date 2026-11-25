@@ -10,12 +10,12 @@
 </head>
 <body>
   <main>
-    <header><img src="../../assets/icon.png" alt="" width="64" height="64"><div><h1>Maxweb<span>ДЛЯ APPLE SILICON</span></h1><p>Ваш MAX. В своём окне.</p></div></header>
+    <header><img src="../../assets/icon.png" alt="" width="64" height="64"><div><h1>Maxweb<span>ДЛЯ APPLE SILICON</span></h1><p>MAX и Telegram. В одном окне.</p></div></header>
     <div class="section-label">ВНЕШНИЙ ВИД</div>
     <section class="card">
       <label class="row theme-row" for="theme"><span><strong>Тема приложения</strong><small id="theme-hint">Боковая панель, настройки и экран блокировки</small></span><select id="theme"><option value="system">Как в macOS</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
       <div class="divider"></div>
-      <div class="row zoom-row"><label for="max-zoom"><strong>Масштаб MAX</strong><small id="max-zoom-hint">Только содержимое MAX во всех аккаунтах · 50–200%</small></label><div class="zoom-controls"><div class="zoom-value"><input id="max-zoom" type="number" min="50" max="200" step="1" value="100" inputmode="numeric" aria-describedby="max-zoom-hint"><span aria-hidden="true">%</span></div><button id="max-zoom-reset" class="secondary" type="button" title="Вернуть масштаб MAX к 100%">100%</button></div></div>
+      <div class="row zoom-row"><label for="max-zoom"><strong>Масштаб содержимого</strong><small id="max-zoom-hint">MAX и Telegram во всех аккаунтах · 50–200%</small></label><div class="zoom-controls"><div class="zoom-value"><input id="max-zoom" type="number" min="50" max="200" step="1" value="100" inputmode="numeric" aria-describedby="max-zoom-hint"><span aria-hidden="true">%</span></div><button id="max-zoom-reset" class="secondary" type="button" title="Вернуть масштаб содержимого к 100%">100%</button></div></div>
       <p class="hint zoom-feedback" id="max-zoom-feedback" role="status" aria-live="polite">⌘+ / ⌘− — изменить, ⌘0 — сбросить</p>
     </section>
     <p class="hint" id="theme-feedback" role="status" aria-live="polite">Системная тема меняется вместе с оформлением Mac. Светлую или тёмную можно выбрать вручную.</p>
@@ -32,18 +32,18 @@
     <p class="hint">Файлы проверяются по цифровой подписи и SHA-256. Установка выполняется после нажатия кнопки, с перезапуском и сохранением аккаунтов.</p>
     <div class="section-label">УВЕДОМЛЕНИЯ</div>
     <section class="card">
-      <label class="row"><span><strong>Сообщения из MAX</strong><small>Разрешить системные уведомления</small></span><input type="checkbox" id="notifications" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
+      <label class="row"><span><strong>Сообщения из MAX и Telegram</strong><small>Разрешить системные уведомления</small></span><input type="checkbox" id="notifications" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
       <div class="divider"></div>
       <label class="row"><span><strong>Название аккаунта</strong><small>Показывать, в какой аккаунт пришло сообщение</small></span><input type="checkbox" id="banner-account" role="switch"><span class="switch" aria-hidden="true"></span></label>
       <label class="row"><span><strong>Отправитель или чат</strong><small>При отключении текст тоже скрывается</small></span><input type="checkbox" id="banner-sender" role="switch"><span class="switch" aria-hidden="true"></span></label>
-      <label class="row"><span><strong>Текст сообщения</strong><small>Показывать доступный предпросмотр из MAX</small></span><input type="checkbox" id="banner-text" role="switch"><span class="switch" aria-hidden="true"></span></label>
+      <label class="row"><span><strong>Текст сообщения</strong><small>Показывать доступный предпросмотр сообщения</small></span><input type="checkbox" id="banner-text" role="switch"><span class="switch" aria-hidden="true"></span></label>
       <label class="row"><span><strong>Звук баннера</strong><small>Системный звук уведомлений macOS</small></span><input type="checkbox" id="banner-sound" role="switch"><span class="switch" aria-hidden="true"></span></label>
       <div class="banner-preview" aria-label="Пример баннера"><strong id="preview-title"></strong><small id="preview-account"></small><p id="preview-body"></p></div>
       <div class="row"><span><strong>Проверить доставку</strong><small>Отправить пробное уведомление</small></span><button id="test" class="secondary">Проверить</button></div>
       <div class="divider"></div>
       <button id="system" class="row link"><span>Настройки уведомлений macOS</span><span aria-hidden="true">↗</span></button>
     </section>
-    <p class="hint">После входа включите уведомления в самом MAX. В macOS разрешите баннеры и звук для Maxweb. Режим «Фокусирование» может скрывать уведомления.</p>
+    <p class="hint">После входа включите уведомления внутри MAX или Telegram. В macOS разрешите баннеры и звук для Maxweb. Режим «Фокусирование» может скрывать уведомления.</p>
     <div class="section-label">БЛОКИРОВКА ПРИЛОЖЕНИЯ</div>
     <section class="card security-card">
       <div class="row"><span><strong>Код и Touch ID</strong><small id="security-state">Блокировка выключена</small></span><button id="lock-now" class="secondary" hidden>Заблокировать</button></div>
@@ -60,16 +60,16 @@
         <p id="security-feedback" role="status" aria-live="polite"></p>
       </form>
     </section>
-    <p class="hint">При включённой защите код запрашивается при запуске, после сна и блокировки Mac. Пока приложение заблокировано, баннеры скрывают аккаунт, отправителя и текст. Запомните код: восстановить его внутри приложения нельзя. Блокировка закрывает доступ к окну; данные сессий MAX остаются в профиле macOS.</p>
+    <p class="hint">При включённой защите код запрашивается при запуске, после сна и блокировки Mac. Пока приложение заблокировано, баннеры скрывают аккаунт, отправителя и текст. Запомните код: восстановить его внутри приложения нельзя. Блокировка закрывает доступ к окну; данные сессий мессенджеров остаются в профиле macOS.</p>
     <div class="section-label">РАБОТА ПРИЛОЖЕНИЯ</div>
     <section class="card">
-      <label class="row"><span><strong>Запускать при входе в Mac</strong><small id="login-hint">Чтобы MAX всегда оставался на связи</small></span><input type="checkbox" id="login" role="switch"><span class="switch" aria-hidden="true"></span></label>
+      <label class="row"><span><strong>Запускать при входе в Mac</strong><small id="login-hint">Чтобы мессенджеры оставались на связи</small></span><input type="checkbox" id="login" role="switch"><span class="switch" aria-hidden="true"></span></label>
       <div class="divider"></div>
       <div class="row"><span><strong>Работать после закрытия окна</strong><small>Открыть снова можно из строки меню или Dock</small></span><span class="pill">Включено</span></div>
     </section>
     <p class="hint">Полный выход — ⌘Q. После выхода, во время сна Mac и без интернета новые сообщения не поступают.</p>
     <div id="status" role="status" aria-live="polite"></div>
-    <footer><div><span id="version">Maxweb</span><small>Независимый клиент веб-версии MAX</small></div><button id="open" class="primary">Открыть MAX <span aria-hidden="true">→</span></button></footer>
+    <footer><div><span id="version">Maxweb</span><small>Независимый клиент MAX и Telegram</small></div><button id="open" class="primary">Открыть мессенджер <span aria-hidden="true">→</span></button></footer>
   </main>
 </body>
 </html>

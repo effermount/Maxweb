@@ -110,3 +110,17 @@ form button.accent { background: var(--accent); color: white; }
 #empty-state p { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 24px; }
 #empty-add { padding: 12px 24px; }
 .collapsed #empty-state { left: 72px; }
+
+#account-picker { border: 1px solid var(--border); border-radius: 14px; padding: 8px; background: var(--surface); }
+.picker-heading { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 10px; font-size: 11px; }
+#picker-close { font-size: 20px; border-radius: 6px; width: 24px; height: 24px; }
+#account-picker > button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 4px; border-radius: 10px; text-align: left; }
+#account-picker strong { display: block; font-size: 12px; }
+#account-picker small { display: block; color: var(--muted); font-size: 9px; margin-top: 4px; }
+#account-picker > button > span:last-child { margin-left: auto; color: var(--muted); font-size: 20px; }
+.picker-icon { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; color: white; font-size: 19px; font-weight: 700; }
+.max-icon { background: #353d8b; }
+.telegram-icon, .service-mark.telegram { background: #238ac2; }
+.picker-icon svg { width: 23px; fill: currentColor; }
+.service-mark { position: absolute; bottom: 0; right: 0; width: 14px; height: 14px; display: grid; place-items: center; border-radius: 5px 0 0 0; color: white; background: #353d8b; font-size: 9px; z-index: 1; }
+.service-mark svg { width: 11px; fill: currentColor; }

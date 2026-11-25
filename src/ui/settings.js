@@ -25,7 +25,7 @@ async function init() {
 $('notifications').addEventListener('change', async event => {
   const control = event.target;
   control.disabled = true;
-  try { await window.maxweb.notifications(control.checked); status(control.checked ? 'Уведомления из MAX разрешены.' : 'Уведомления из MAX отключены.'); }
+  try { await window.maxweb.notifications(control.checked); status(control.checked ? 'Уведомления мессенджеров разрешены.' : 'Уведомления мессенджеров отключены.'); }
   catch (error) { control.checked = !control.checked; status(error.message, true); }
   finally { control.disabled = false; }
 });
@@ -86,9 +86,9 @@ function renderBanner(value) {
   banner = value;
   for (const [key, id] of Object.entries(bannerIDs)) $(id).checked = banner[key];
   $('banner-text').disabled = !banner.showSender;
-  $('preview-title').textContent = banner.showSender ? 'Отправитель MAX' : 'Maxweb';
+  $('preview-title').textContent = banner.showSender ? 'Имя отправителя' : 'Maxweb';
   $('preview-account').textContent = banner.showAccount ? 'Название вашего аккаунта' : '';
-  $('preview-body').textContent = banner.showSender && banner.showText ? 'Так будет выглядеть текст сообщения' : 'Новое сообщение в MAX';
+  $('preview-body').textContent = banner.showSender && banner.showText ? 'Так будет выглядеть текст сообщения' : 'Новое сообщение';
 }
 for (const [key, id] of Object.entries(bannerIDs)) $(id).addEventListener('change', async () => {
   const previous = banner;
@@ -169,14 +169,14 @@ function renderMaxZoom(percent) {
   selectedMaxZoom = percent;
   $('max-zoom').value = String(percent);
   $('max-zoom-reset').disabled = percent === 100;
-  $('max-zoom-feedback').textContent = `Масштаб MAX: ${percent}%. ⌘+ / ⌘− — изменить, ⌘0 — сбросить.`;
+  $('max-zoom-feedback').textContent = `Масштаб содержимого: ${percent}%. ⌘+ / ⌘− — изменить, ⌘0 — сбросить.`;
   $('max-zoom-feedback').classList.remove('error');
 }
 async function saveMaxZoom(percent) {
   $('max-zoom').disabled = true; $('max-zoom-reset').disabled = true;
   try {
     renderMaxZoom(await window.maxweb.maxZoom(percent));
-    $('max-zoom-feedback').textContent = `Масштаб MAX: ${selectedMaxZoom}%. Сохранён для всех аккаунтов.`;
+    $('max-zoom-feedback').textContent = `Масштаб содержимого: ${selectedMaxZoom}%. Сохранён для всех аккаунтов.`;
     $('max-zoom-feedback').classList.remove('error');
   } catch (error) {
     renderMaxZoom(selectedMaxZoom);

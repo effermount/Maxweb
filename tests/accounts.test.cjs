@@ -58,3 +58,18 @@ test('only bounded PNG thumbnails are persisted for account avatars', () => {
     assert.equal(normalizeAccounts([{ ...account, avatar: invalid }])[0].avatar, undefined);
   }
 });
+
+
+test('Telegram account types persist without changing existing MAX partitions', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-telegram-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const store = createStore(dir), telegram = newAccount(undefined, 'telegram');
+  store.set({ accounts: [...store.get().accounts, telegram], activeAccountId: telegram.id });
+  const restored = createStore(dir).get();
+  assert.equal(restored.accounts[1].service, 'telegram');
+  assert.equal(accountPartition('default'), 'persist:max');
+  assert.notEqual(accountPartition(telegram.id, 'telegram'), accountPartition(telegram.id, 'max'));
+  assert.throws(() => newAccount(undefined, 'unknown'));
+  assert.throws(() => accountPartition('default', 'telegram'));
+  assert.equal(normalizeAccounts([{ ...telegram, service: 'unknown' }]).length, 0);
+});

@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('maxwebShell', {
   get: () => ipcRenderer.invoke('shell:get'),
   select: id => ipcRenderer.invoke('accounts:select', id),
   logout: id => ipcRenderer.invoke('accounts:logout', id),
-  add: name => ipcRenderer.invoke('accounts:add', name),
+  add: (service = 'max') => ipcRenderer.invoke('accounts:add', undefined, service),
   rename: (id, name) => ipcRenderer.invoke('accounts:rename', id, name),
   settings: () => ipcRenderer.invoke('shell:settings'),
   onState: callback => {

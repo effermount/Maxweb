@@ -5,10 +5,10 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 app.setPath('userData', process.env.MAXWEB_TEST_PROFILE || fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-scroll-')));
-const fixture = `<!doctype html><html><body><section id="chat"><div id="history" style="height:150px;width:400px;overflow:auto"><div id="messages"><div style="height:900px"></div><div class="message message--isOut">Old outgoing message</div></div></div><button class="scrollButton" aria-label="Вниз">Down</button><div data-testid="composer"><div contenteditable="true" role="textbox"></div><button id="send" aria-label="Отправить сообщение">Send</button></div></section><script>
+const fixture = `<!doctype html><html><body><section id="chat"><div id="history" style="height:150px;width:400px;overflow:auto"><div id="messages"><div style="height:900px"></div><div class="message message--isOut">Old outgoing message</div></div></div><div id="bottom-bar"><button class="scrollButton" aria-label="Последняя реакция" onclick="window.wrongJump=true">Reaction</button><button id="scroll-bottom" class="scrollButton" aria-label="Вниз">Down</button><div data-testid="composer"><div contenteditable="true" role="textbox"></div><button id="send" aria-label="Отправить сообщение">Send</button></div></div></section><script>
 +const history = document.querySelector('#history'), editor = document.querySelector('[contenteditable]'), messages = document.querySelector('#messages');
 +window.bottomClicks = 0;
-+document.querySelector('.scrollButton').onclick = () => { window.bottomClicks++; history.scrollTop = history.scrollHeight; };
++document.querySelector('#scroll-bottom').onclick = () => { window.bottomClicks++; history.scrollTop = history.scrollHeight; };
 +window.add = out => { const item = document.createElement('div'); item.className = 'message' + (out ? ' message--isOut' : ''); item.textContent = 'Fixture message'; messages.append(item); };
 +document.querySelector('#send').onclick = () => { window.add(true); editor.textContent = ''; };
 +editor.addEventListener('keydown', event => { if(event.key==='Enter' && !event.shiftKey) { window.add(true); editor.textContent=''; } });
@@ -30,12 +30,24 @@ app.whenReady().then(async () => {
   assert.equal(await js('window.bottomClicks'), 0, 'Shift+Enter must not scroll');
   await js('editor.textContent="fixture"; document.querySelector("#send").click()'); await pause();
   assert.ok(await js('window.bottomClicks > 0'));
+  assert.equal(await js('window.wrongJump===true'), false, 'Reaction jump must not be mistaken for the bottom button');
   assert.equal(await js('history.scrollTop + history.clientHeight >= history.scrollHeight - 1'), true);
   await js('document.dispatchEvent(new WheelEvent("wheel", { bubbles:true })); history.scrollTop=0');
   const clicks = await js('window.bottomClicks'); await new Promise(resolve => setTimeout(resolve, 900));
   assert.equal(await js('window.bottomClicks'), clicks, 'manual scrolling cancels follow-up jumps');
   await js('editor.textContent="fixture"; editor.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}))'); await pause();
   assert.ok(await js('window.bottomClicks') > clicks, 'Enter send follows its message');
-  console.log('PASS: sent messages jump to bottom; incoming messages, loaded history and Shift+Enter do not; manual scroll cancels follow-up');
+  // Reproduce MAX's floating composer covering the bottom of the history.
+  await js(`document.getElementById('chat').style.cssText='position:relative;width:400px;height:150px';
+    document.querySelector('[data-testid="composer"]').style.cssText='position:absolute;bottom:0;left:0;right:0;height:50px;background:white';
+    history.scrollTop=history.scrollHeight;editor.textContent='fixture';document.querySelector('#send').click()`);
+  await pause();
+  assert.equal(await js(`document.querySelector('.message--isOut:last-child').getBoundingClientRect().bottom <= document.querySelector('[data-testid="composer"]').getBoundingClientRect().top - 10`), true, 'Sent bubble must be above the floating composer');
+  await js('editor.textContent="fixture";document.querySelector("#send").click()'); await pause();
+  assert.equal(await js('history.querySelectorAll("[data-maxweb-scroll-spacer]").length'), 1, 'Reserve space must not accumulate per send');
+  await js('document.dispatchEvent(new WheelEvent("wheel",{bubbles:true}));history.scrollTop=0');
+  await pause();
+  assert.equal(await js('history.scrollTop'), 0, 'Manual scrolling must still win with the floating composer');
+  console.log('PASS: sent bubbles stay above the floating composer; sent messages jump to bottom; incoming messages, loaded history and Shift+Enter do not; manual scroll cancels follow-up');
   clearTimeout(deadline); app.quit();
 }).catch(error => { console.error(error); clearTimeout(deadline); app.exit(1); });

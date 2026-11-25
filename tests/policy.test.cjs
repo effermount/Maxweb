@@ -29,3 +29,16 @@ test('unread badge does not mistake numbers inside chat names for unread counts'
   assert.equal(unreadBadge('(0) MAX'), '');
   assert.equal(unreadBadge('Группа (123)'), '');
 });
+
+
+test('Telegram origins and permissions stay within the selected messenger', () => {
+  const { isServiceURL, isTelegramURL } = require('../src/policy.cjs');
+  assert.ok(isTelegramURL('https://web.telegram.org/k/#123'));
+  for (const url of ['http://web.telegram.org/k/', 'https://web.telegram.org.evil.test/k/', 'https://web.telegram.org@evil.test/', 'https://evil@web.telegram.org/k/', 'https://web.telegram.org:444/k/', 'https://t.me/test']) assert.equal(isTelegramURL(url), false);
+  assert.equal(isServiceURL('https://web.max.ru/', 'telegram'), false);
+  assert.equal(isServiceURL('https://web.telegram.org/k/', 'max'), false);
+  assert.ok(mayUsePermission('media', 'https://web.telegram.org', 'https://web.telegram.org/k/', true, 'telegram'));
+  assert.equal(mayUsePermission('notifications', 'https://web.telegram.org', 'https://web.telegram.org/k/', false, 'telegram'), false);
+  assert.equal(mayUsePermission('media', 'https://web.max.ru', 'https://web.telegram.org/k/', true, 'telegram'), false);
+  assert.equal(mayUsePermission('media', 'https://web.telegram.org', 'file:///settings.html', true, 'telegram'), false);
+});

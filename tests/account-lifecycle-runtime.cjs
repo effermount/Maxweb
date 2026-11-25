@@ -35,7 +35,7 @@ client.ready.then(async () => {
  const firstSession = client.getSession('default');
  await client.getAccountContents('default').executeJavaScript('localStorage.setItem("fixture","first")');
  await firstSession.cookies.set({ url: 'https://web.max.ru/', name: 'fixture', value: 'first' });
- await js('document.getElementById("add").click()');
+ await js('document.getElementById("add").click();document.querySelector("[data-service=max]").click()');
  await wait(() => client.getState().accounts.length === 2);
  const secondID = client.getState().activeAccountId, secondSession = client.getSession(secondID);
  assert.equal(await js('document.getElementById("account-form").hidden'), true, 'Adding must not request a local name');
@@ -85,7 +85,7 @@ client.ready.then(async () => {
  await settings.executeJavaScript('window.maxweb.open()');
  assert.equal(client.getState().pane, 'account');
  assert.equal((await client.testNotification()).delivered, true, 'Test banners must work with no accounts');
- await js('document.getElementById("empty-add").click()');
+ await js('document.getElementById("empty-add").click();document.querySelector("[data-service=max]").click()');
  await wait(() => client.getState().accounts.length === 1);
  assert.notEqual(client.getState().accounts[0].id, 'default');
  assert.notEqual(client.getState().accounts[0].id, secondID);

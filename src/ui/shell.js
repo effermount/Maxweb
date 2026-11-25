@@ -9,21 +9,23 @@ function maybeAutoTouchID() {
 }
 window.addEventListener('focus', maybeAutoTouchID);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') autoTouchAttempted = false; else maybeAutoTouchID(); });
+const serviceName = account => account?.service === 'telegram' ? 'Telegram' : 'MAX';
 const error = message => { $('error').textContent = message; };
 const action = async operation => { try { error(''); return await operation(); } catch (e) { error(e.message); } };
 function edit(account = null) {
+  $('account-picker').hidden = true;
   if (state.sidebarCollapsed) void window.maxwebShell.collapse(false);
   editingAccount = account; editing = account?.id || null;
   $('profile-name').hidden = !account;
   $('logout-account').hidden = !account;
-  $('profile-name').textContent = account?.profileName ? `Использовать имя MAX: ${account.profileName}` : 'Получать имя из MAX автоматически';
+  $('profile-name').textContent = account?.profileName ? `Использовать имя ${serviceName(account)}: ${account.profileName}` : `Получать имя из ${serviceName(account)} автоматически`;
   $('form-title').textContent = 'Настройки аккаунта';
   $('save').textContent = account ? 'Сохранить' : 'Добавить';
   $('account-name').value = account?.name || '';
   $('account-form').hidden = false; $('add').hidden = true;
   $('account-name').focus(); $('account-name').select();
 }
-function closeForm() { $('account-form').hidden = true; $('add').hidden = false; editing = null; error(''); }
+function closeForm() { $('account-picker').hidden = true; $('account-form').hidden = true; $('add').hidden = false; editing = null; error(''); }
 function render(next) {
   const wasLocked = state?.locked;
   state = next;
@@ -58,9 +60,14 @@ function render(next) {
       image.addEventListener('error', () => image.remove(), { once: true });
       avatar.append(image);
     }
+    const serviceMark = document.createElement('span'); serviceMark.className = `service-mark ${account.service === 'telegram' ? 'telegram' : 'max'}`;
+    serviceMark.title = serviceName(account); serviceMark.setAttribute('aria-hidden', 'true');
+    if (account.service === 'telegram') serviceMark.innerHTML = '<svg viewBox="0 0 24 24"><path d="m3 11 17-7-4 16-5-5 5-6-7 5-6-3Z"/></svg>';
+    else serviceMark.textContent = 'M';
+    avatar.append(serviceMark);
     const label = document.createElement('span'); label.className = 'account-label';
     const name = document.createElement('span'); name.className = 'name'; name.textContent = account.name;
-    const status = document.createElement('span'); status.className = 'account-status'; status.textContent = account.status === 'offline' ? 'Нет соединения' : account.status === 'loading' ? 'Подключение…' : account.notifications === false ? 'Уведомления выкл.' : 'MAX';
+    const status = document.createElement('span'); status.className = 'account-status'; status.textContent = account.status === 'offline' ? 'Нет соединения' : account.status === 'loading' ? 'Подключение…' : account.notifications === false ? 'Уведомления выкл.' : serviceName(account);
     label.append(name, status); button.append(avatar, label);
     button.addEventListener('click', () => action(() => window.maxwebShell.select(account.id)));
     const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'rename'; rename.textContent = '✎'; rename.title = `Настройки аккаунта «${account.name}»`; rename.setAttribute('aria-label', rename.title);
@@ -80,13 +87,20 @@ function render(next) {
   $('update-alert').hidden = !['available', 'downloading', 'ready'].includes(state.update.status);
   $('update-alert').textContent = state.update.status === 'ready' ? 'Обновление готово к установке ↗' : state.update.status === 'downloading' ? `Обновление · ${state.update.progress}%` : `Доступна версия ${state.update.version} ↗`;
 }
-const addAccount = () => action(async () => {
+const addAccount = service => action(async () => {
   $('add').disabled = true; $('empty-add').disabled = true;
-  try { closeForm(); render(await window.maxwebShell.add()); }
+  try { closeForm(); render(await window.maxwebShell.add(service)); }
   finally { $('add').disabled = false; $('empty-add').disabled = false; }
 });
-$('add').addEventListener('click', addAccount);
-$('empty-add').addEventListener('click', addAccount);
+function showAccountPicker() {
+  if (state.sidebarCollapsed) void window.maxwebShell.collapse(false);
+  closeForm(); $('account-picker').hidden = false; $('add').hidden = true;
+  $('account-picker').querySelector('[data-service]').focus();
+}
+$('add').addEventListener('click', showAccountPicker);
+$('empty-add').addEventListener('click', showAccountPicker);
+$('picker-close').addEventListener('click', closeForm);
+for (const button of $('account-picker').querySelectorAll('[data-service]')) button.addEventListener('click', () => addAccount(button.dataset.service));
 $('logout-account').addEventListener('click', () => action(async () => {
   const id = editingAccount?.id;
   if (!id) return;

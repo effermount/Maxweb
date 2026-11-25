@@ -1,10 +1,15 @@
 'use strict';
-const MAX_URL = 'https://web.max.ru/';
+const { serviceInfo } = require('./services.cjs');
+const MAX_URL = serviceInfo('max').url;
 
-function isMaxURL(value) {
-  try { return new URL(value).origin === 'https://web.max.ru'; }
-  catch { return false; }
+function isServiceURL(value, service = 'max') {
+  try {
+    const url = new URL(value);
+    return !url.username && !url.password && url.origin === new URL(serviceInfo(service).url).origin;
+  } catch { return false; }
 }
+const isMaxURL = value => isServiceURL(value, 'max');
+const isTelegramURL = value => isServiceURL(value, 'telegram');
 
 function isExternalURL(value) {
   try {
@@ -13,8 +18,8 @@ function isExternalURL(value) {
   } catch { return false; }
 }
 
-function mayUsePermission(permission, requestingOrigin, topLevelURL, notifications = true) {
-  if (!isMaxURL(requestingOrigin) || !isMaxURL(topLevelURL)) return false;
+function mayUsePermission(permission, requestingOrigin, topLevelURL, notifications = true, service = 'max') {
+  if (!isServiceURL(requestingOrigin, service) || !isServiceURL(topLevelURL, service)) return false;
   if (permission === 'notifications') return notifications;
   return ['media', 'fullscreen', 'clipboard-sanitized-write', 'background-sync'].includes(permission);
 }
@@ -25,4 +30,4 @@ function unreadBadge(title) {
   return Number(match[1]) > 99 ? '99+' : String(Number(match[1]));
 }
 
-module.exports = { MAX_URL, isMaxURL, isExternalURL, mayUsePermission, unreadBadge };
+module.exports = { MAX_URL, isMaxURL, isTelegramURL, isServiceURL, isExternalURL, mayUsePermission, unreadBadge };

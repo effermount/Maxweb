@@ -60,7 +60,7 @@ test('banner privacy never leaks sender through text or locked account names', (
   assert.deepEqual(bannerContent(account, 'Alice', 'Secret', settings), { title: 'Alice', subtitle: account.name, body: 'Secret', silent: false });
   for (const locked of [false, true]) {
     const value = bannerContent(account, 'Alice', 'Alice: Secret', { ...settings, showSender: false }, locked);
-    assert.equal(value.title, 'Maxweb'); assert.equal(value.body, 'Новое сообщение в MAX');
+    assert.equal(value.title, 'Maxweb'); assert.equal(value.body, locked ? 'Новое сообщение' : 'Новое сообщение в MAX');
   }
   const locked = bannerContent(account, 'Alice', 'Secret', settings, true);
   assert.equal(locked.subtitle, ''); assert.equal(locked.title, 'Maxweb');

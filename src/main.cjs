@@ -3,7 +3,8 @@ const { app, BrowserWindow, WebContentsView, Menu, Tray, nativeImage, session, s
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { MAX_URL, isMaxURL, isExternalURL, mayUsePermission, unreadBadge } = require('./policy.cjs');
+const { isServiceURL, isExternalURL, mayUsePermission, unreadBadge } = require('./policy.cjs');
+const { serviceInfo } = require('./services.cjs');
 const { createStore } = require('./store.cjs');
 const { newAccount, accountName, accountPartition, accountAvatar } = require('./accounts.cjs');
 const { normalizeRepository } = require('./update-core.cjs');
@@ -16,6 +17,8 @@ const uiURL = name => pathToFileURL(path.join(__dirname, `ui/${name}.html`)).hre
 const shellURL = uiURL('shell');
 const settingsURL = uiURL('settings');
 const offlineURL = uiURL('offline');
+const telegramOfflineURL = uiURL('offline-telegram');
+const isOfflineURL = url => url === offlineURL || url === telegramOfflineURL;
 
 app.setName('Maxweb');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -32,15 +35,18 @@ const sidebarWidth = () => preferences().sidebarCollapsed ? 72 : SIDEBAR;
 const preferences = () => store.get();
 const activeId = () => preferences().activeAccountId;
 const activeRuntime = () => runtimes.get(activeId());
+const accountInfo = id => serviceInfo(preferences().accounts.find(a => a.id === id)?.service);
+const accountURL = (url, id) => { const account = preferences().accounts.find(a => a.id === id); return !!account && isServiceURL(url, account.service); };
+const accountTitle = account => `${account.name} — ${serviceInfo(account.service).name}`;
 
 const MAX_ZOOM_LEVELS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
 function setMaxZoom(percent) {
   security.requireUnlocked();
   if (!Number.isInteger(percent) || percent < 50 || percent > 200) throw new Error('Введите целый масштаб от 50 до 200%.');
   if (preferences().maxZoom !== percent) store.set({ maxZoom: percent });
-  for (const { view } of runtimes.values()) {
+  for (const [id, { view }] of runtimes) {
     const contents = view.webContents;
-    if (!contents.isDestroyed() && isMaxURL(contents.getURL())) contents.setZoomFactor(percent / 100);
+    if (!contents.isDestroyed() && accountURL(contents.getURL(), id)) contents.setZoomFactor(percent / 100);
   }
   if (settingsView && !settingsView.webContents.isDestroyed()) settingsView.webContents.send('max-zoom:state', percent);
   return percent;
@@ -133,15 +139,15 @@ function selectAccount(id, focus = true) {
     activePane = 'account';
     const runtime = runtimes.get(id) || createAccountView(preferences().accounts.find(a => a.id === id));
     layout();
-    mainWindow.setTitle(`${preferences().accounts.find(a => a.id === id).name} — MAX`);
+    mainWindow.setTitle(accountTitle(preferences().accounts.find(a => a.id === id)));
     if (focus) { showWindow(); runtime.view.webContents.focus(); }
     broadcast();
   } finally { switching = false; }
   return shellState();
 }
-function addAccount(name) {
+function addAccount(name, service = 'max') {
   security.requireUnlocked();
-  const account = newAccount(name);
+  const account = newAccount(name, service);
   store.set({ accounts: [...preferences().accounts, account] });
   createAccountView(account);
   selectAccount(account.id);
@@ -157,13 +163,13 @@ async function logoutAccount(id) {
   try {
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'question', message: `Выйти из «${account.name}»?`,
-      detail: 'Сессия MAX на этом Mac будет удалена, а аккаунт исчезнет из боковой панели. Для повторного входа потребуется авторизация. Другие аккаунты останутся на месте.',
+      detail: `Сессия ${serviceInfo(account.service).name} на этом Mac будет удалена, а аккаунт исчезнет из боковой панели. Для повторного входа потребуется авторизация. Другие аккаунты останутся на месте.`,
       buttons: ['Отмена', 'Выйти'], defaultId: 0, cancelId: 0, noLink: true
     });
     security.requireUnlocked();
     if (response !== 1) return shellState();
     const runtime = runtimes.get(id);
-    const ses = runtime?.session || session.fromPartition(accountPartition(id));
+    const ses = runtime?.session || session.fromPartition(accountPartition(id, account.service));
     clearAccountNotifications(id);
     if (runtime) {
       clearTimeout(runtime.retryTimer);
@@ -195,27 +201,27 @@ function renameAccount(id, name) {
   security.requireUnlocked();
   if (!preferences().accounts.some(a => a.id === id)) throw new Error('Аккаунт не найден.');
   store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, name: accountName(name), customName: true } : a) });
-  if (id === activeId() && activePane === 'account') mainWindow.setTitle(`${accountName(name)} — MAX`);
+  if (id === activeId() && activePane === 'account') mainWindow.setTitle(`${accountName(name)} — ${accountInfo(id).name}`);
   broadcast(); return shellState();
 }
 function external(url) { if (isExternalURL(url)) void shell.openExternal(url).catch(() => {}); }
 function secureNavigation(contents, id) {
   contents.setWindowOpenHandler(({ url }) => {
-    if (isMaxURL(url)) { if (!security.locked) { selectAccount(id); void contents.loadURL(url).catch(() => {}); } }
+    if (accountURL(url, id)) { if (!security.locked) { selectAccount(id); void contents.loadURL(url).catch(() => {}); } }
     else external(url);
     return { action: 'deny' };
   });
-  const guard = event => { if (!isMaxURL(event.url)) { event.preventDefault(); external(event.url); } };
+  const guard = event => { if (!accountURL(event.url, id)) { event.preventDefault(); external(event.url); } };
   contents.on('will-navigate', guard);
   contents.on('will-redirect', guard);
   contents.on('will-attach-webview', event => event.preventDefault());
 }
-function configureSession(ses) {
+function configureSession(ses, service = 'max') {
   ses.setUserAgent(ses.getUserAgent(), 'ru-RU,ru,en-US,en');
   const topURL = contents => contents && !contents.isDestroyed() ? contents.getURL() : '';
-  ses.setPermissionCheckHandler((contents, permission, origin) => mayUsePermission(permission, origin, topURL(contents), preferences().notifications));
+  ses.setPermissionCheckHandler((contents, permission, origin) => mayUsePermission(permission, origin, topURL(contents), preferences().notifications, service));
   ses.setPermissionRequestHandler(async (contents, permission, callback, details) => {
-    if (!mayUsePermission(permission, details.requestingUrl, topURL(contents), preferences().notifications)) return callback(false);
+    if (!mayUsePermission(permission, details.requestingUrl, topURL(contents), preferences().notifications, service)) return callback(false);
     if (permission === 'media') {
       try {
         for (const type of details.mediaTypes || []) {
@@ -227,7 +233,7 @@ function configureSession(ses) {
     callback(true);
   });
   ses.on('will-download', (_event, item) => {
-    item.setSaveDialogOptions({ title: 'Сохранить файл из MAX', buttonLabel: 'Сохранить' });
+    item.setSaveDialogOptions({ title: `Сохранить файл из ${serviceInfo(service).name}`, buttonLabel: 'Сохранить' });
     item.once('done', (_event, state) => {
       if (state === 'interrupted') void dialog.showMessageBox({ type: 'warning', message: 'Не удалось скачать файл', detail: 'Проверьте соединение и попробуйте ещё раз.' });
     });
@@ -238,11 +244,12 @@ async function loadMax(id = activeId()) {
   if (!runtime || runtime.view.webContents.isDestroyed()) return;
   clearTimeout(runtime.retryTimer);
   runtime.status = 'loading'; broadcast();
-  await runtime.view.webContents.loadURL(MAX_URL).catch(() => {});
+  await runtime.view.webContents.loadURL(accountInfo(id).url).catch(() => {});
 }
 function createAccountView(account) {
-  const ses = session.fromPartition(accountPartition(account.id));
-  configureSession(ses);
+  const id = account.id;
+  const ses = session.fromPartition(accountPartition(account.id, account.service));
+  configureSession(ses, account.service);
   const view = new WebContentsView({ webPreferences: {
     preload: path.join(__dirname, 'account-preload.cjs'),
     session: ses, zoomFactor: preferences().maxZoom / 100, zoomMode: 'isolated', nodeIntegration: false, contextIsolation: true, sandbox: true,
@@ -256,19 +263,19 @@ function createAccountView(account) {
   const contents = view.webContents;
   contents.on('before-input-event', () => security.activity());
   contents.on('zoom-changed', (_event, direction) => {
-    setImmediate(() => { if (!contents.isDestroyed() && isMaxURL(contents.getURL())) stepMaxZoom(direction); });
+    setImmediate(() => { if (!contents.isDestroyed() && accountURL(contents.getURL(), id)) stepMaxZoom(direction); });
   });
   secureNavigation(contents, account.id);
   contents.on('did-start-navigation', details => { if (details.isMainFrame && !details.isSameDocument) clearAccountNotifications(account.id); });
   contents.on('page-title-updated', (_event, title) => { runtime.unread = unreadBadge(title); broadcast(); });
   contents.on('did-finish-load', () => {
-    contents.setZoomFactor(isMaxURL(contents.getURL()) ? preferences().maxZoom / 100 : 1);
-    runtime.status = contents.getURL() === offlineURL ? 'offline' : 'ready'; broadcast();
+    contents.setZoomFactor(accountURL(contents.getURL(), id) ? preferences().maxZoom / 100 : 1);
+    runtime.status = isOfflineURL(contents.getURL()) ? 'offline' : 'ready'; broadcast();
   });
   contents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
-    if (!isMainFrame || code === -3 || !isMaxURL(url) || quitting) return;
+    if (!isMainFrame || code === -3 || !accountURL(url, account.id) || quitting) return;
     clearTimeout(runtime.retryTimer);
-    void contents.loadURL(offlineURL).then(() => {
+    void contents.loadURL(account.service === 'telegram' ? telegramOfflineURL : offlineURL).then(() => {
       runtime.status = 'offline'; broadcast();
       runtime.retryTimer = setTimeout(() => loadMax(account.id), 15000);
     }).catch(() => {});
@@ -357,8 +364,8 @@ function trusted(contents, url, event) {
 }
 function bindIPC() {
   const senderAccount = event => {
-    if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame || !isMaxURL(event.senderFrame.url)) return;
-    for (const [id, runtime] of runtimes) if (runtime.view.webContents === event.sender) return id;
+    if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) return;
+    for (const [id, runtime] of runtimes) if (runtime.view.webContents === event.sender && accountURL(event.senderFrame.url, id)) return id;
   };
   ipcMain.on('app:activity', event => {
     if (senderAccount(event) || trusted(mainWindow?.webContents, shellURL, event) || trusted(settingsView?.webContents, settingsURL, event)) security.activity();
@@ -372,7 +379,7 @@ function bindIPC() {
     const account = preferences().accounts.find(a => a.id === id);
     if (!account || account.profileName === name && (account.avatar || '') === avatar) return;
     store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, profileName: name, avatar, ...(!a.customName ? { name } : {}) } : a) });
-    if (id === activeId() && !security.locked && activePane === 'account') mainWindow.setTitle(`${preferences().accounts.find(a => a.id === id).name} — MAX`);
+    if (id === activeId() && !security.locked && activePane === 'account') mainWindow.setTitle(accountTitle(preferences().accounts.find(a => a.id === id)));
     broadcast();
   });
   ipcMain.on('account:notification', (event, request) => {
@@ -446,7 +453,7 @@ function bindIPC() {
     if (typeof enabled !== 'boolean') throw new Error('Неверное значение.');
     store.set({ notifications: enabled });
     if (!enabled) clearNotifications();
-    for (const { view } of runtimes.values()) if (isMaxURL(view.webContents.getURL())) view.webContents.reload();
+    for (const [id, { view }] of runtimes) if (accountURL(view.webContents.getURL(), id)) view.webContents.reload();
     return enabled;
   });
   handle('settings:banner', 'settings', value => {
@@ -484,7 +491,7 @@ function createMenu() {
   const notificationTest = () => testNotification().catch(error => dialog.showMessageBox({ type: 'warning', message: 'Не удалось показать уведомление', detail: error.message }));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Maxweb', submenu: [
-      { label: 'О Maxweb', click: () => dialog.showMessageBox({ type: 'info', message: `Maxweb ${APP_VERSION}`, detail: 'Независимый клиент веб-версии MAX для Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
+      { label: 'О Maxweb', click: () => dialog.showMessageBox({ type: 'info', message: `Maxweb ${APP_VERSION}`, detail: 'Независимый клиент MAX и Telegram для Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
       { label: 'Проверить обновления…', click: checkUpdates },
       { label: 'Заблокировать Maxweb', accelerator: 'CmdOrCtrl+L', click: () => security.lock() },
       { label: 'Настройки…', accelerator: 'CmdOrCtrl+,', click: showSettings },
@@ -501,11 +508,11 @@ function createMenu() {
     ] },
     { label: 'Вид', submenu: [
       { label: 'Свернуть / развернуть панель', accelerator: 'CmdOrCtrl+Shift+S', click: () => { if (security.locked) return; store.set({ sidebarCollapsed: !preferences().sidebarCollapsed }); layout(); broadcast(); } },
-      { label: 'Перезагрузить MAX', accelerator: 'CmdOrCtrl+R', click: () => loadMax() },
+      { label: 'Перезагрузить мессенджер', accelerator: 'CmdOrCtrl+R', click: () => loadMax() },
       { type: 'separator' },
-      { label: 'Масштаб MAX 100%', accelerator: 'CmdOrCtrl+0', click: () => { if (!security.locked) setMaxZoom(100); } },
-      { label: 'Увеличить MAX', accelerator: 'CmdOrCtrl+Plus', click: () => stepMaxZoom('in') },
-      { label: 'Уменьшить MAX', accelerator: 'CmdOrCtrl+-', click: () => stepMaxZoom('out') },
+      { label: 'Масштаб содержимого 100%', accelerator: 'CmdOrCtrl+0', click: () => { if (!security.locked) setMaxZoom(100); } },
+      { label: 'Увеличить содержимое', accelerator: 'CmdOrCtrl+Plus', click: () => stepMaxZoom('in') },
+      { label: 'Уменьшить содержимое', accelerator: 'CmdOrCtrl+-', click: () => stepMaxZoom('out') },
       { type: 'separator' }, { role: 'togglefullscreen', label: 'На весь экран' }
     ] },
     { label: 'Окно', submenu: [{ role: 'minimize', label: 'Свернуть' }, { role: 'zoom', label: 'Масштабировать' }, { role: 'close', label: 'Закрыть окно' }] },
@@ -514,7 +521,7 @@ function createMenu() {
   const image = nativeImage.createFromPath(path.join(__dirname, '../assets/trayTemplate.png')); image.setTemplateImage(true);
   tray = new Tray(image); tray.setToolTip('Maxweb — все аккаунты работают в фоне');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Открыть MAX', click: showWindow }, { label: 'Настройки и обновления…', click: showSettings },
+    { label: 'Открыть Maxweb', click: showWindow }, { label: 'Настройки и обновления…', click: showSettings },
     { type: 'separator' }, { label: 'Завершить Maxweb', click: () => app.quit() }
   ]));
   tray.on('click', showWindow);
@@ -585,7 +592,7 @@ const ready = hasLock ? app.whenReady().then(async () => {
     cleanupTimer = setTimeout(() => updater.finishPending(), 15000);
   }
   powerMonitor.on('resume', () => {
-    for (const [id, runtime] of runtimes) if (runtime.view.webContents.getURL() === offlineURL) void loadMax(id);
+    for (const [id, runtime] of runtimes) if (isOfflineURL(runtime.view.webContents.getURL())) void loadMax(id);
     autoCheck();
   });
 }) : Promise.resolve();
