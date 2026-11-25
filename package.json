@@ -1,7 +1,7 @@
 {
   "name": "maxweb",
   "productName": "Maxweb",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Отдельное приложение для веб-версии MAX на Mac с Apple Silicon",
   "private": true,
   "main": "src/main.cjs",
@@ -20,7 +20,8 @@
     "dist": "electron-builder --mac dmg --arm64",
     "postdist": "node scripts/release.cjs",
     "release:files": "node scripts/release.cjs",
-    "publish:release": "node scripts/publish-release.cjs"
+    "publish:release": "node scripts/publish-release.cjs",
+    "test:account-notifications": "electron tests/account-notifications-runtime.cjs"
   },
   "devDependencies": {
     "electron": "45.4.1",

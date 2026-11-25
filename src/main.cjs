@@ -337,6 +337,7 @@ function bindIPC() {
     const reply = type => { if (!event.sender.isDestroyed()) event.sender.send('account:notification-event', { id: request.id, type }); };
     if (!preferences().notifications || !Notification.isSupported() || accountNotifications.size >= 100) { reply('error'); return; }
     const account = preferences().accounts.find(a => a.id === id);
+    if (account.notifications === false) { reply('close'); return; }
     if (typeof request.title !== 'string' || typeof request.body !== 'string') return;
     const notification = new Notification(bannerContent(account, request.title, request.body, preferences().banner, security.locked));
     accountNotifications.set(key, notification);
@@ -378,6 +379,12 @@ function bindIPC() {
   handle('accounts:select', 'shell', selectAccount);
   handle('accounts:add', 'shell', addAccount);
   handle('accounts:rename', 'shell', renameAccount);
+  handle('accounts:notifications', 'shell', (id, enabled) => {
+    if (typeof enabled !== 'boolean' || !preferences().accounts.some(a => a.id === id)) throw new Error('Неверные настройки аккаунта.');
+    store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, notifications: enabled } : a) });
+    if (!enabled) clearAccountNotifications(id);
+    broadcast(); return shellState();
+  });
   handle('shell:settings', 'shell', () => { showSettings(); });
   handle('settings:get', 'settings', () => ({ theme: themeState(), maxZoom: preferences().maxZoom, notifications: preferences().notifications, banner: preferences().banner, security: security.snapshot(), openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
   handle('settings:max-zoom', 'settings', setMaxZoom);

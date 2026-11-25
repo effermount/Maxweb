@@ -15,6 +15,7 @@ function normalizeAccounts(value) {
     if (!item || !validAccountId(item.id) || seen.has(item.id)) continue;
     try {
       const account = { id: item.id, name: accountName(item.name) };
+      if (item.notifications === false) account.notifications = false;
       if (typeof item.customName === 'boolean') account.customName = item.customName;
       if (typeof item.profileName === 'string') { try { account.profileName = accountName(item.profileName); } catch {} }
       // Preserve names edited in earlier versions.

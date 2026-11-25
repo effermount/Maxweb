@@ -1,6 +1,7 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('maxwebShell', {
+  notifications: (id, enabled) => ipcRenderer.invoke('accounts:notifications', id, enabled),
   collapse: value => ipcRenderer.invoke('shell:collapse', value),
   profileName: id => ipcRenderer.invoke('accounts:profile-name', id),
   lock: () => ipcRenderer.invoke('security:lock'),

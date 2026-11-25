@@ -42,12 +42,17 @@ function render(next) {
     const avatar = document.createElement('span'); avatar.className = `avatar tone-${index % 5}`; avatar.textContent = account.name.trim().split(/\s+/).slice(0, 2).map(part => [...part][0]).join('').toLocaleUpperCase('ru'); avatar.setAttribute('aria-hidden', 'true');
     const label = document.createElement('span'); label.className = 'account-label';
     const name = document.createElement('span'); name.className = 'name'; name.textContent = account.name;
-    const status = document.createElement('span'); status.className = 'account-status'; status.textContent = account.status === 'offline' ? 'Нет соединения' : account.status === 'loading' ? 'Подключение…' : 'MAX';
+    const status = document.createElement('span'); status.className = 'account-status'; status.textContent = account.status === 'offline' ? 'Нет соединения' : account.status === 'loading' ? 'Подключение…' : account.notifications === false ? 'Уведомления выкл.' : 'MAX';
     label.append(name, status); button.append(avatar, label);
     button.addEventListener('click', () => action(() => window.maxwebShell.select(account.id)));
     const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'rename'; rename.textContent = '✎'; rename.title = `Переименовать «${account.name}»`; rename.setAttribute('aria-label', rename.title);
     rename.addEventListener('click', () => edit(account));
-    row.append(button, rename);
+    const mute = document.createElement('button'); mute.type = 'button'; mute.className = `account-mute${account.notifications === false ? ' is-muted' : ''}`;
+    mute.title = `${account.notifications === false ? 'Включить' : 'Выключить'} системные уведомления: ${account.name}`;
+    mute.setAttribute('aria-label', mute.title); mute.setAttribute('aria-pressed', String(account.notifications === false));
+    mute.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/><path class="mute-slash" d="m3 3 18 18"/></svg>';
+    mute.addEventListener('click', () => action(async () => { mute.disabled = true; try { render(await window.maxwebShell.notifications(account.id, account.notifications === false)); } finally { mute.disabled = false; } }));
+    row.append(button, mute, rename);
     if (account.unread) { const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = account.unread; row.append(badge); }
     $('accounts').append(row);
   }

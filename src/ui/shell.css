@@ -21,7 +21,7 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
 button:hover { background: var(--hover); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 button:disabled { opacity: .45; cursor: default; }
-.account { display: flex; align-items: center; gap: 10px; width: calc(100% - 24px); min-height: 65px; border-radius: 11px; text-align: left; padding: 10px 7px; }
+.account { display: flex; align-items: center; gap: 10px; width: calc(100% - 48px); min-height: 65px; border-radius: 11px; text-align: left; padding: 10px 7px; }
 .avatar { width: 34px; height: 34px; flex-shrink: 0; border-radius: 11px; background: var(--avatar); color: var(--avatar-text); display: grid; place-items: center; font-size: 14px; font-weight: 650; }
 .active .avatar { color: white; background: var(--accent); }
 .account-label { min-width: 0; flex: 1; }
@@ -79,3 +79,12 @@ form button.accent { background: var(--accent); color: white; }
 .avatar.tone-3 { background: var(--avatar-orange); color: var(--avatar-orange-text); }
 .avatar.tone-4 { background: var(--avatar-pink); color: var(--avatar-pink-text); }
 .active .avatar { color: white; background: var(--accent); }
+
+.account-mute { width: 24px; height: 30px; flex-shrink: 0; display: grid; place-items: center; padding: 4px; border-radius: 6px; color: var(--muted); }
+.account-mute svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.account-mute .mute-slash { display: none; }
+.account-mute.is-muted { color: var(--accent-text); }
+.account-mute.is-muted .mute-slash { display: block; }
+.collapsed .account-mute { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; padding: 2px; border: 2px solid var(--sidebar); background: var(--sidebar); border-radius: 7px; }
+.collapsed .account-mute svg { width: 14px; height: 14px; }
+.collapsed .account-mute:hover { background: var(--hover); }
