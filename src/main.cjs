@@ -6,7 +6,7 @@ const { pathToFileURL } = require('node:url');
 const { isServiceURL, isServiceAuthURL, isServiceNavigationURL, isExternalURL, mayUsePermission, unreadBadge } = require('./policy.cjs');
 const { serviceInfo } = require('./services.cjs');
 const { createStore } = require('./store.cjs');
-const { newAccount, accountName, accountPartition, accountAvatar } = require('./accounts.cjs');
+const { newAccount, accountName, accountPartition, accountAvatar, reorderAccounts } = require('./accounts.cjs');
 const { normalizeRepository } = require('./update-core.cjs');
 const { AppSecurity } = require('./security.cjs');
 const { normalizeBanner, bannerContent } = require('./notifications.cjs');
@@ -461,6 +461,10 @@ function bindIPC() {
   handle('accounts:add', 'shell', addAccount);
   handle('accounts:logout', 'shell', logoutAccount);
   handle('accounts:rename', 'shell', renameAccount);
+  handle('accounts:reorder', 'shell', ids => {
+    store.set({ accounts: reorderAccounts(preferences().accounts, ids) });
+    broadcast(); return shellState();
+  });
   handle('accounts:notifications', 'shell', (id, enabled) => {
     if (typeof enabled !== 'boolean' || !preferences().accounts.some(a => a.id === id)) throw new Error('Неверные настройки аккаунта.');
     store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, notifications: enabled } : a) });

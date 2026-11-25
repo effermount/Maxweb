@@ -8,7 +8,7 @@ const timer=setTimeout(()=>app.exit(1),15000);
 const wait=async check=>{for(let n=0;n<100;n++){if(await check())return;await new Promise(r=>setTimeout(r,30));}throw Error('Timed out');};
 client.ready.then(async()=>{
  const shell=client.getMainWindow().webContents;if(shell.isLoading())await new Promise(r=>shell.once('did-stop-loading',r));
- client.renameAccount('default','Алексей Кузнецов');
+ client.renameAccount('default','Алексей Константинович Кузнецов');
  const telegramID=client.addAccount('Анна Сергеевна','telegram').activeAccountId;
  client.addAccount('Андрей Смирнов','whatsapp');
  client.addAccount('Виктор Ковалёв','vk');
@@ -21,10 +21,10 @@ client.ready.then(async()=>{
   await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   const geometry=await js(`Array.from(document.querySelectorAll('.account-row'),row=>{
    const rect=selector=>{const r=row.querySelector(selector).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}};
-   return {avatar:rect('.avatar'),initials:rect('.avatar-initials'),service:rect('.service-mark'),mute:rect('.account-mute'),badge:rect('.badge'),height:row.getBoundingClientRect().height,insideAvatar:!!row.querySelector('.avatar .service-mark')};
+   return {avatar:rect('.avatar'),initials:rect('.avatar-initials'),service:rect('.service-mark'),mute:rect('.account-mute'),badge:rect('.badge'),height:row.getBoundingClientRect().height,name:rect('.name'),rename:rect('.rename'),nameWrap:getComputedStyle(row.querySelector('.name')).whiteSpace,insideAvatar:!!row.querySelector('.avatar .service-mark')};
   })`);
   const overlaps=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
-  for(const {avatar,initials,service,mute,badge,height,insideAvatar} of geometry){
+  for(const {avatar,initials,service,mute,badge,height,name,rename,nameWrap,insideAvatar} of geometry){
    assert.equal(insideAvatar,false);
    if(collapsed){
     assert.equal(height,56,'Larger avatars must retain a compact row height');
@@ -36,7 +36,14 @@ client.ready.then(async()=>{
     assert(inside(avatar,service),'Messenger badge must fit inside the profile avatar');
     assert(mute.right<=service.left,'Bell must sit to the left of the messenger badge');
     assert.equal(overlaps(mute,badge),false);
-   }else assert.equal(overlaps(service,avatar),false);
+   }else {
+    const inside=(outer,inner)=>inner.left>=outer.left&&inner.right<=outer.right&&inner.top>=outer.top&&inner.bottom<=outer.bottom;
+    assert(inside(avatar,mute)); assert(inside(avatar,service));
+    assert.equal(nameWrap,'normal','Long profile names must wrap');
+    assert(name.right-name.left>=100,'Profile name must use the available panel width');
+    assert(name.right<=rename.left,'Edit button must not cover the name');
+    assert(Math.abs(rename.top-name.top)<=6,'Edit button must align with the first name line');
+   }
    assert.equal(overlaps(service,mute),false);assert.equal(overlaps(service,badge),false);
   }
   const avatarColors=await js('Array.from(document.querySelectorAll(".avatar"),el=>getComputedStyle(el).backgroundColor)');

@@ -101,3 +101,11 @@ test('VK accounts persist independently and cannot replace the original MAX part
   assert.throws(() => accountPartition('default', 'vk'));
   assert.deepEqual(normalizeAccounts([{ id: 'default', name: 'Invalid', service: 'vk' }]), []);
 });
+
+test('account reordering accepts only a full permutation and preserves metadata', () => {
+  const { reorderAccounts } = require('../src/accounts.cjs');
+  const accounts = [{ id: 'default', name: 'Primary', avatar: 'image', customName: true }, newAccount('Other','telegram')];
+  assert.deepEqual(reorderAccounts(accounts, accounts.map(a=>a.id).reverse()), [...accounts].reverse());
+  assert.equal(reorderAccounts(accounts, accounts.map(a=>a.id))[0], accounts[0]);
+  for (const order of [null, {}, [], ['default'], ['default','default'], ['default','missing'], [null,accounts[1].id]]) assert.throws(()=>reorderAccounts(accounts,order));
+});

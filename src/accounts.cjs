@@ -46,4 +46,10 @@ function newAccount(name, service = 'max') {
   const info = serviceInfo(service);
   return { id: randomUUID(), service, name: accountName(name ?? `Новый аккаунт ${info.name}`), customName: false };
 }
-module.exports = { validAccountId, accountName, normalizeAccounts, accountPartition, newAccount, accountAvatar };
+function reorderAccounts(accounts, ids) {
+  if (!Array.isArray(ids) || ids.length !== accounts.length || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) throw new Error('Неверный порядок аккаунтов.');
+  const byId = new Map(accounts.map(account => [account.id, account]));
+  if (ids.some(id => !byId.has(id))) throw new Error('Список аккаунтов изменился. Повторите перемещение.');
+  return ids.map(id => byId.get(id));
+}
+module.exports = { validAccountId, accountName, normalizeAccounts, accountPartition, newAccount, accountAvatar, reorderAccounts };

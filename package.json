@@ -1,7 +1,7 @@
 {
   "name": "maxweb",
   "productName": "Maxweb",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "description": "Клиент MAX, Telegram, WhatsApp и VK на Mac с Apple Silicon",
   "private": true,
   "main": "src/main.cjs",
@@ -24,6 +24,7 @@
     "test:account-notifications": "electron tests/account-notifications-runtime.cjs",
     "test:vk": "electron tests/vk-runtime.cjs",
     "test:whatsapp": "electron tests/whatsapp-runtime.cjs",
+    "test:account-order": "electron tests/account-order-runtime.cjs",
     "test:sidebar": "electron tests/sidebar-layout-runtime.cjs",
     "test:telegram": "electron tests/telegram-runtime.cjs",
     "test:scroll": "electron tests/scroll-runtime.cjs",
