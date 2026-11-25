@@ -33,10 +33,16 @@
     </div>
   </aside>
 <main id="lock-screen" hidden aria-labelledby="lock-title">
-    <div class="lock-card"><img src="../../assets/icon.png" alt="" width="76" height="76">
-      <h2 id="lock-title">Maxweb заблокирован</h2><p>Введите PIN, чтобы открыть аккаунты</p>
-      <form id="unlock-form"><label for="unlock-pin">PIN-код</label><input id="unlock-pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" required><button id="unlock" class="accent" type="submit">Разблокировать</button></form>
-      <button id="touch-id" hidden>Разблокировать с Touch ID</button><p id="unlock-error" role="status" aria-live="polite"></p>
-    </div>
+    <section class="lock-card">
+      <img class="lock-logo" src="../../assets/icon.png" alt="" width="52" height="52">
+      <p class="lock-eyebrow">ДОСТУП К АККАУНТАМ</p>
+      <h2 id="lock-title">Разблокировать Maxweb</h2>
+      <p id="lock-description">Введите код доступа</p>
+      <button id="touch-id" class="touch-primary" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5a7 7 0 0 1 11 6v3M5 8a7 7 0 0 0-1 4v3M8 20c2-3 2-5 2-8a2 2 0 0 1 4 0c0 5-1 8-3 10M7 16v-4a5 5 0 0 1 10 0c0 4-.5 7-2 10M20 18l-1 3M4 19l-1 2"/></svg><span id="touch-id-label">Разблокировать с Touch ID</span></button>
+      <div id="code-divider" class="code-divider" hidden><span>или используйте код</span></div>
+      <form id="unlock-form"><label for="unlock-pin">Код доступа</label><div class="code-entry"><input id="unlock-pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" placeholder="Введите код" required><button id="unlock" type="submit" title="Разблокировать кодом" aria-label="Разблокировать кодом"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></div></form>
+      <p id="unlock-error" role="status" aria-live="polite"></p>
+      <p class="lock-footnote">Ваши аккаунты под защитой</p>
+    </section>
   </main>
 </body></html>

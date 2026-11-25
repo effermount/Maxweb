@@ -63,16 +63,28 @@ form button.accent { background: var(--accent); color: white; }
 .collapsed nav { min-height: 52px; }
 .loading aside, .locked aside { display: none; }
 #profile-name { font-size: 10px; text-align: left; color: var(--accent-text); padding: 8px 0 0; overflow-wrap: anywhere; }
-#lock-screen { height: 100vh; display: grid; place-items: center; background: var(--sidebar); }
-.lock-card { width: 340px; text-align: center; }
-.lock-card h2 { font-size: 22px; margin: 20px 0 10px; }
-.lock-card p { font-size: 12px; color: var(--muted); }
-#unlock-form { display: grid; gap: 14px; margin-top: 24px; padding: 24px; }
-#unlock-form label { margin: 0; }
-#unlock-pin { font-size: 24px; letter-spacing: 9px; text-align: center; }
-#unlock-form button { font-size: 13px; padding: 12px; }
-#touch-id { background: var(--selected); border-radius: 8px; padding: 12px; margin-top: 14px; }
-#unlock-error { min-height: 36px; color: var(--error); }
+#lock-screen { min-height: 100vh; display: grid; place-items: center; padding: 28px; background: radial-gradient(ellipse at 50% 20%, var(--accent-soft), transparent 65%), var(--sidebar); }
+.lock-card { width: 360px; max-width: 100%; padding: 32px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 24px; box-shadow: 0 20px 70px var(--shadow); }
+.lock-logo { display: block; margin: 0 auto 22px; }
+.lock-eyebrow { font-size: 9px; font-weight: 650; letter-spacing: 1.6px; color: var(--muted); margin: 0 0 10px; }
+.lock-card h2 { font-size: 21px; font-weight: 650; letter-spacing: -.6px; margin: 0 0 10px; }
+#lock-description { font-size: 12px; line-height: 1.6; color: var(--muted); margin: 0 0 24px; }
+.touch-primary { width: 100%; min-height: 44px; border-radius: 12px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; gap: 9px; padding: 10px; font-size: 12px; font-weight: 600; }
+.touch-primary:hover { background: var(--accent-hover); }
+.touch-primary svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.code-divider { display: flex; align-items: center; gap: 12px; font-size: 10px; color: var(--muted); margin: 22px 0; }
+.code-divider::before, .code-divider::after { content: ''; height: 1px; flex: 1; background: var(--divider); }
+#unlock-form { padding: 0; border: 0; background: none; text-align: left; }
+#unlock-form label { font-size: 10px; margin-bottom: 8px; }
+#unlock-form .code-entry { display: flex; align-items: center; gap: 6px; margin: 0; padding: 5px; background: var(--field); border: 1px solid var(--border); border-radius: 12px; }
+.code-entry:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+#unlock-pin { width: 100%; min-width: 0; height: 36px; font-size: 17px; letter-spacing: 5px; border: 0; outline: none; background: transparent; padding: 6px 10px; }
+#unlock-pin::placeholder { font-size: 12px; letter-spacing: 0; color: var(--muted); }
+#unlock { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; padding: 7px; border-radius: 8px; color: var(--on-accent); background: var(--accent); }
+#unlock:hover { background: var(--accent-hover); }
+#unlock svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+#unlock-error { min-height: 30px; margin: 12px 0 0; color: var(--error); font-size: 11px; line-height: 1.5; }
+.lock-footnote { color: var(--muted); font-size: 10px; margin: 8px 0 0; }
 
 .avatar.tone-1 { background: var(--avatar-blue); color: var(--avatar-blue-text); }
 .avatar.tone-2 { background: var(--avatar-green); color: var(--avatar-green-text); }

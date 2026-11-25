@@ -4,7 +4,7 @@ const { promisify } = require('node:util');
 const derive = promisify(scrypt);
 const IDLE_SECONDS = [0, 60, 300, 900, 1800, 3600];
 function validatePIN(pin) {
-  if (typeof pin !== 'string' || !/^\d{4,8}$/.test(pin)) throw new Error('PIN должен содержать от 4 до 8 цифр.');
+  if (typeof pin !== 'string' || !/^\d{4,8}$/.test(pin)) throw new Error('Код должен содержать от 4 до 8 цифр.');
 }
 async function pinRecord(pin) {
   validatePIN(pin);
@@ -58,7 +58,7 @@ class AppSecurity {
       const failures = Math.min(20, s.failures + 1);
       const retryAt = this.now() + (failures >= 5 ? Math.min(300, 30 * 2 ** (failures - 5)) * 1000 : 0);
       this.store.set({ security: { ...s, failures, retryAt } });
-      throw new Error(retryAt > this.now() ? 'Слишком много попыток. Попробуйте позже.' : 'Неверный PIN или недоступна Связка ключей.');
+      throw new Error(retryAt > this.now() ? 'Слишком много попыток. Попробуйте позже.' : 'Неверный код или недоступна Связка ключей.');
     }
     this.store.set({ security: { ...s, failures: 0, retryAt: 0 } });
   }
@@ -71,11 +71,11 @@ class AppSecurity {
       this.requireUnlocked();
       if (generation !== this.generation) throw new Error('Повторите настройку после разблокировки.');
       if (!disable && touchID && !this.canTouchID()) throw new Error('Touch ID недоступен на этом Mac.');
-      if (!disable && !pin && confirmPIN) throw new Error('PIN-коды не совпадают.');
+      if (!disable && !pin && confirmPIN) throw new Error('Коды не совпадают.');
       let verifier = this.settings().verifier;
       if (!disable && (pin || !verifier)) {
         validatePIN(pin);
-        if (pin !== confirmPIN) throw new Error('PIN-коды не совпадают.');
+        if (pin !== confirmPIN) throw new Error('Коды не совпадают.');
         verifier = await this.encrypt(JSON.stringify(await pinRecord(pin)));
       }
       this.requireUnlocked();
@@ -89,7 +89,7 @@ class AppSecurity {
       if (!this.locked) return this.snapshot();
       const generation = this.generation;
       if (biometric) {
-        if (!this.settings().touchID || !this.canTouchID()) throw new Error('Touch ID недоступен. Используйте PIN.');
+        if (!this.settings().touchID || !this.canTouchID()) throw new Error('Touch ID недоступен. Используйте код.');
         await this.promptTouchID();
       } else await this.authenticate(pin);
       if (generation !== this.generation) throw new Error('Состояние блокировки изменилось. Повторите попытку.');

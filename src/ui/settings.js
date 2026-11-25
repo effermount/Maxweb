@@ -102,12 +102,12 @@ function renderSecurity(value) {
   $('security-state').textContent = value.enabled ? 'Защита включена · ⌘L для блокировки' : 'Блокировка выключена';
   $('lock-now').hidden = !value.enabled;
   $('current-pin-label').hidden = !value.enabled;
-  $('new-pin-label').textContent = value.enabled ? 'Новый PIN (пусто — оставить текущий)' : 'PIN-код: от 4 до 8 цифр';
+  $('new-pin-label').textContent = value.enabled ? 'Новый код (пусто — оставить текущий)' : 'Код: от 4 до 8 цифр';
   $('security-save').textContent = value.enabled ? 'Сохранить защиту' : 'Включить блокировку';
   $('security-disable').hidden = !value.enabled;
-  $('security-touch-id').checked = value.touchID && value.touchIDAvailable;
+  $('security-touch-id').checked = value.touchIDAvailable && (value.enabled ? value.touchID : true);
   $('security-touch-id').disabled = !value.touchIDAvailable;
-  $('touch-id-hint').textContent = value.touchIDAvailable ? 'PIN остаётся запасным способом' : 'Touch ID не настроен или недоступен на этом Mac';
+  $('touch-id-hint').textContent = value.touchIDAvailable ? 'Код остаётся запасным способом' : 'Touch ID не настроен или недоступен на этом Mac';
   $('idle-seconds').value = String(value.idleSeconds);
   for (const id of ['current-pin', 'new-pin', 'confirm-pin']) $(id).value = '';
 }

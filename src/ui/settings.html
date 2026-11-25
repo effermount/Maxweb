@@ -46,18 +46,18 @@
     <p class="hint">После входа включите уведомления в самом MAX. В macOS разрешите баннеры и звук для Maxweb. Режим «Фокусирование» может скрывать уведомления.</p>
     <div class="section-label">БЛОКИРОВКА ПРИЛОЖЕНИЯ</div>
     <section class="card security-card">
-      <div class="row"><span><strong>PIN и Touch ID</strong><small id="security-state">Блокировка выключена</small></span><button id="lock-now" class="secondary" hidden>Заблокировать</button></div>
+      <div class="row"><span><strong>Код и Touch ID</strong><small id="security-state">Блокировка выключена</small></span><button id="lock-now" class="secondary" hidden>Заблокировать</button></div>
       <form id="security-form">
-        <label id="current-pin-label" hidden>Текущий PIN<input id="current-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
-        <label><span id="new-pin-label">PIN-код: от 4 до 8 цифр</span><input id="new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
-        <label>Повторите новый PIN<input id="confirm-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
-        <label class="row"><span><strong>Разблокировка с Touch ID</strong><small id="touch-id-hint">PIN остаётся запасным способом</small></span><input type="checkbox" id="security-touch-id" role="switch"><span class="switch" aria-hidden="true"></span></label>
+        <label id="current-pin-label" hidden>Текущий код<input id="current-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+        <label><span id="new-pin-label">Код: от 4 до 8 цифр</span><input id="new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+        <label>Повторите новый код<input id="confirm-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+        <label class="row"><span><strong>Разблокировка с Touch ID</strong><small id="touch-id-hint">Код остаётся запасным способом</small></span><input type="checkbox" id="security-touch-id" role="switch"><span class="switch" aria-hidden="true"></span></label>
         <label class="idle-label">Автоблокировка без действий в приложении<select id="idle-seconds"><option value="60">Через 1 минуту</option><option value="300">Через 5 минут</option><option value="900">Через 15 минут</option><option value="1800">Через 30 минут</option><option value="3600">Через 1 час</option><option value="0">Отключена</option></select></label>
         <div class="security-actions"><button id="security-save" class="primary" type="submit">Включить блокировку</button><button id="security-disable" class="secondary" type="button" hidden>Выключить</button></div>
         <p id="security-feedback" role="status" aria-live="polite"></p>
       </form>
     </section>
-    <p class="hint">При включённой защите PIN запрашивается при запуске, после сна и блокировки Mac. Пока приложение заблокировано, баннеры скрывают аккаунт, отправителя и текст. Запомните PIN: восстановить его внутри приложения нельзя. Блокировка закрывает доступ к окну; данные сессий MAX остаются в профиле macOS.</p>
+    <p class="hint">При включённой защите Код запрашивается при запуске, после сна и блокировки Mac. Пока приложение заблокировано, баннеры скрывают аккаунт, отправителя и текст. Запомните код: восстановить его внутри приложения нельзя. Блокировка закрывает доступ к окну; данные сессий MAX остаются в профиле macOS.</p>
     <div class="section-label">РАБОТА ПРИЛОЖЕНИЯ</div>
     <section class="card">
       <label class="row"><span><strong>Запускать при входе в Mac</strong><small id="login-hint">Чтобы MAX всегда оставался на связи</small></span><input type="checkbox" id="login" role="switch"><span class="switch" aria-hidden="true"></span></label>

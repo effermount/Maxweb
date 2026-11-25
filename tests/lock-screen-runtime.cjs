@@ -1,0 +1,34 @@
+'use strict';
+const {app,BrowserWindow,nativeTheme}=require('electron');
+const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
+const deadline=setTimeout(()=>app.exit(1),20000);
+app.whenReady().then(async()=>{
+ nativeTheme.themeSource='dark';
+ const win=new BrowserWindow({width:1000,height:720,show:true,webPreferences:{preload:path.join(__dirname,'lock-screen-preload.cjs'),contextIsolation:true,sandbox:true}});
+ await win.loadFile(path.join(__dirname,'../src/ui/shell.html'));
+ const js=code=>win.webContents.executeJavaScript(code);
+ const wait=async check=>{for(let i=0;i<60;i++){if(await check())return;await new Promise(r=>setTimeout(r,50));}throw Error('Timed out');};
+ // Deterministic foreground check in this fixture only; no real biometric prompt.
+ await js('document.hasFocus=()=>true;window.dispatchEvent(new Event("focus"));void 0');
+ await wait(()=>js('window.__lockTest.calls()===1'));
+ await wait(()=>js('document.getElementById("unlock-error").textContent.includes("введите код")'));
+ await js('window.__lockTest.emit();window.dispatchEvent(new Event("focus"));void 0');
+ await new Promise(r=>setTimeout(r,150));assert.equal(await js('window.__lockTest.calls()'),1,'Cancellation must not trigger a loop');
+ assert.equal(await js('document.getElementById("touch-id").hidden'),false);
+ assert.equal(await js('document.getElementById("unlock-pin").getAttribute("type")'),'password');
+ const qa=path.join(__dirname,'../.tools/qa');fs.mkdirSync(qa,{recursive:true});
+ fs.writeFileSync(path.join(qa,'lock-redesign-dark.png'),(await win.webContents.capturePage()).toPNG());
+ nativeTheme.themeSource='light';await new Promise(r=>setTimeout(r,120));
+ fs.writeFileSync(path.join(qa,'lock-redesign-light.png'),(await win.webContents.capturePage()).toPNG());
+ await js('window.__lockTest.succeed();document.getElementById("touch-id").click();void 0');
+ await wait(()=>js('document.getElementById("lock-screen").hidden'));
+ assert.equal(await js('window.__lockTest.calls()'),2);
+ await js('window.__lockTest.reset(false);void 0');
+ assert.equal(await js('document.getElementById("touch-id").hidden'),true);
+ await js('document.getElementById("unlock-pin").value="0000";document.getElementById("unlock-form").dispatchEvent(new Event("submit",{cancelable:true}));void 0');
+ await wait(()=>js('document.getElementById("unlock-error").textContent.includes("Неверный код")'));
+ await js('document.getElementById("unlock-pin").value="493725";document.getElementById("unlock-form").dispatchEvent(new Event("submit",{cancelable:true}));void 0');
+ await wait(()=>js('document.getElementById("lock-screen").hidden'));
+ console.log('PASS: automatic Touch ID once, cancellation without loop, manual retry, unavailable biometrics and code fallback');
+ clearTimeout(deadline);app.quit();
+}).catch(error=>{console.error(error);app.exit(1);});

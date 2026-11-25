@@ -1,6 +1,14 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let state, editing = null, editingAccount = null;
+let autoTouchAttempted = false, unlocking = false;
+function maybeAutoTouchID() {
+  if (!state?.locked || !state.security.touchID || !state.security.touchIDAvailable || autoTouchAttempted || unlocking || document.visibilityState !== 'visible' || !document.hasFocus()) return;
+  autoTouchAttempted = true;
+  void unlock(true);
+}
+window.addEventListener('focus', maybeAutoTouchID);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') autoTouchAttempted = false; else maybeAutoTouchID(); });
 const error = message => { $('error').textContent = message; };
 const action = async operation => { try { error(''); return await operation(); } catch (e) { error(e.message); } };
 function edit(account = null) {
@@ -23,8 +31,11 @@ function render(next) {
   $('lock-screen').hidden = !state.locked;
   if (state.locked) {
     $('accounts').replaceChildren(); closeForm();
-    $('touch-id').hidden = !state.security.touchID || !state.security.touchIDAvailable;
-    if (!wasLocked) { $('unlock-pin').value = ''; $('unlock-error').textContent = ''; $('unlock-pin').focus(); }
+    const biometric = state.security.touchID && state.security.touchIDAvailable;
+    $('touch-id').hidden = !biometric; $('code-divider').hidden = !biometric;
+    $('lock-description').textContent = biometric ? 'Коснитесь датчика Touch ID, чтобы продолжить' : 'Введите код доступа, чтобы открыть аккаунты';
+    if (!wasLocked) { autoTouchAttempted = false; $('unlock-pin').value = ''; $('unlock-error').textContent = ''; if (!biometric) $('unlock-pin').focus(); }
+    requestAnimationFrame(maybeAutoTouchID);
     return;
   }
   document.body.classList.toggle('collapsed', state.sidebarCollapsed);
@@ -81,12 +92,15 @@ $('collapse').addEventListener('click', () => action(async () => { closeForm(); 
 $('profile-name').addEventListener('click', () => action(async () => { const next = await window.maxwebShell.profileName(editingAccount.id); closeForm(); render(next); }));
 $('lock').addEventListener('click', () => action(() => window.maxwebShell.lock()));
 async function unlock(biometric) {
+  if (unlocking) return;
+  unlocking = true; autoTouchAttempted = true;
+  $('touch-id-label').textContent = biometric ? 'Проверяем Touch ID…' : 'Разблокировать с Touch ID';
   $('unlock').disabled = true; $('touch-id').disabled = true; $('unlock-error').textContent = '';
   try {
     if (biometric) await window.maxwebShell.touchID(); else await window.maxwebShell.unlock($('unlock-pin').value);
     $('unlock-pin').value = ''; render(await window.maxwebShell.get());
-  } catch (error) { $('unlock-error').textContent = error.message; $('unlock-pin').value = ''; $('unlock-pin').focus(); }
-  finally { $('unlock').disabled = false; $('touch-id').disabled = false; }
+  } catch (error) { $('unlock-error').textContent = biometric ? 'Touch ID не выполнен. Повторите попытку или введите код.' : error.message.replace(/^Error invoking remote method '[^']+': Error: /, ''); $('unlock-pin').value = ''; $('unlock-pin').focus(); }
+  finally { unlocking = false; $('unlock').disabled = false; $('touch-id').disabled = false; $('touch-id-label').textContent = 'Разблокировать с Touch ID'; }
 }
 $('unlock-form').addEventListener('submit', event => { event.preventDefault(); void unlock(false); });
 $('touch-id').addEventListener('click', () => unlock(true));
