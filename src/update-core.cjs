@@ -33,8 +33,16 @@ function payload(manifest) {
   };
 }
 function canonicalManifest(manifest) { return Buffer.from(JSON.stringify(payload(manifest)), 'utf8'); }
-function verifyManifest(manifest, publicKey, baseURL, { allowFile = false } = {}) {
-  if (!manifest || manifest.schema !== 1 || !VERSION.test(manifest.version) || manifest.platform !== 'darwin' || manifest.arch !== 'arm64') throw new Error('Этот выпуск не предназначен для Maxweb на Apple Silicon.');
+function supportsMacArchitecture(releaseArch, arch = process.arch) {
+  return ['arm64', 'x64'].includes(arch) && (releaseArch === arch || releaseArch === 'universal');
+}
+function matchesMacBinary(architectures, releaseArch, arch = process.arch) {
+  const slices = new Set(architectures.trim().split(/\s+/));
+  return supportsMacArchitecture(releaseArch, arch) && slices.has(arch === 'x64' ? 'x86_64' : 'arm64') &&
+    (releaseArch !== 'universal' || slices.has('arm64') && slices.has('x86_64'));
+}
+function verifyManifest(manifest, publicKey, baseURL, { allowFile = false, arch = process.arch, requireCompatible = true } = {}) {
+  if (!manifest || manifest.schema !== 1 || !VERSION.test(manifest.version) || manifest.platform !== 'darwin' || !['arm64', 'x64', 'universal'].includes(manifest.arch) || requireCompatible && !supportsMacArchitecture(manifest.arch, arch)) throw new Error('Этот выпуск не предназначен для архитектуры этого Mac.');
   if (!Number.isSafeInteger(manifest.size) || manifest.size < 1 || manifest.size > MAX_ARCHIVE || !/^[a-f0-9]{64}$/.test(manifest.sha256)) throw new Error('Некорректная контрольная сумма или размер обновления.');
   if (typeof manifest.notes !== 'string' || manifest.notes.length > 12000 || typeof manifest.publishedAt !== 'string' || !Number.isFinite(Date.parse(manifest.publishedAt)) || typeof manifest.signature !== 'string' || !/^[A-Za-z0-9+/]{86}==$/.test(manifest.signature)) throw new Error('Некорректное описание обновления.');
   if (!verify(null, canonicalManifest(manifest), publicKey, Buffer.from(manifest.signature, 'base64'))) throw new Error('Подпись обновления не совпадает. Установка отменена.');
@@ -101,7 +109,9 @@ async function githubRelease(repository, options) {
   const repo = normalizeRepository(repository);
   const release = await readJSON(`https://api.github.com/repos/${repo}/releases/latest`, options);
   if (release.draft || release.prerelease) throw new Error('Стабильный выпуск ещё не опубликован.');
-  const asset = release.assets?.find(item => item.name === 'latest.json');
+  // Existing ARM64 clients use latest.json; new clients prefer an explicitly
+  // Universal manifest, falling back when checking releases made before it existed.
+  const asset = release.assets?.find(item => item.name === 'latest-mac.json') || release.assets?.find(item => item.name === 'latest.json');
   if (!asset?.browser_download_url?.startsWith(`https://github.com/${repo}/releases/download/`)) throw new Error('В релизе отсутствует подписанный файл latest.json.');
   return { manifest: await readJSON(asset.browser_download_url, options), manifestURL: asset.browser_download_url };
 }
@@ -139,4 +149,4 @@ async function downloadVerified(manifest, destination, options = {}) {
     throw error;
   }
 }
-module.exports = { compareVersions, normalizeRepository, canonicalManifest, verifyManifest, readJSON, githubRelease, downloadVerified };
+module.exports = { compareVersions, normalizeRepository, canonicalManifest, verifyManifest, readJSON, githubRelease, downloadVerified, supportsMacArchitecture, matchesMacBinary };

@@ -21,6 +21,6 @@ if (fs.existsSync(privateFile)) {
   fs.writeFileSync(publicFile, publicPEM);
 }
 if (process.argv.includes('--key-only')) process.exit(0);
-if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Эта сборка требует Mac с Apple Silicon.');
+if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(process.arch)) throw new Error('Эта сборка требует Mac с Intel или Apple Silicon.');
 const result = spawnSync(process.execPath, [path.join(root, 'node_modules/electron/install.js')], { stdio: 'inherit' });
 process.exit(result.status ?? 1);

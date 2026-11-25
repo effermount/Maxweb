@@ -13,3 +13,8 @@ test('release notes support Windows newlines and fail closed for absent or empty
   assert.throws(() => releaseNotes('# Maxweb 1.2.4\n- Old', '1.2.5'), /Нет описания/);
   assert.throws(() => releaseNotes('# Maxweb 1.2.5\n\n## Maxweb 1.2.4\n- Old', '1.2.5'), /Пустое описание/);
 });
+test('rebranded release notes exclude the previous Maxweb history', () => {
+  const notes = '# Обла 1.2.14\n\n- New brand\n\n## Maxweb 1.2.13\n\n- Universal\n';
+  assert.equal(releaseNotes(notes, '1.2.14'), '- New brand');
+  assert.equal(releaseNotes(notes, '1.2.13'), '- Universal');
+});

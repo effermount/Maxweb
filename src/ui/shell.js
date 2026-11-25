@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let state, editing = null, editingAccount = null;
-let draggingId = null, suppressAccountClickUntil = 0;
+let suppressAccountClickUntil = 0, pointerDrag = null, dragFrame = 0;
 let autoTouchAttempted = false, unlocking = false;
 function maybeAutoTouchID() {
   if (!state?.locked || !state.security.touchID || !state.security.touchIDAvailable || autoTouchAttempted || unlocking || document.visibilityState !== 'visible' || !document.hasFocus()) return;
@@ -28,7 +28,7 @@ function edit(account = null) {
 }
 function closeForm() { $('account-picker').hidden = true; $('account-form').hidden = true; $('add').hidden = false; editing = null; error(''); }
 function render(next) {
-  if (draggingId && !next.locked) { state = next; return; }
+  if (pointerDrag && !next.locked) { state = next; return; }
   if (next.locked) finishDrag();
   const wasLocked = state?.locked;
   state = next;
@@ -56,7 +56,7 @@ function render(next) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'account';
     button.setAttribute('aria-label', account.name);
     button.title = `${account.name}${index < 9 ? ` · ⌘${index + 1}` : ''} · Перетащите для перемещения · Правый клик — настройки`;
-    button.draggable = true; button.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
+    button.draggable = false; button.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
     if (account.active) button.setAttribute('aria-current', 'page');
     const avatar = document.createElement('span'); avatar.className = `avatar tone-${[...account.id].reduce((sum, char) => (sum * 31 + char.codePointAt(0)) >>> 0, 0) % 5}`; avatar.setAttribute('aria-hidden', 'true');
     const initials = document.createElement('span'); initials.className = 'avatar-initials'; initials.textContent = account.name.trim().split(/\s+/).slice(0, 2).map(part => [...part][0]).join('').toLocaleUpperCase('ru'); avatar.append(initials);
@@ -73,7 +73,7 @@ function render(next) {
     else serviceMark.textContent = 'M';
     const label = document.createElement('span'); label.className = 'account-label';
     const name = document.createElement('span'); name.className = 'name'; name.textContent = account.name;
-    const status = document.createElement('span'); status.className = 'account-status'; status.textContent = account.status === 'offline' ? 'Нет соединения' : account.status === 'loading' ? 'Подключение…' : account.notifications === false ? 'Уведомления выкл.' : serviceName(account);
+    const status = document.createElement('span'); status.className = 'account-status'; status.textContent = account.status === 'offline' ? 'Нет соединения' : account.status === 'loading' ? 'Подключение…' : serviceName(account);
     label.append(name, status); button.append(avatar, label, serviceMark);
     button.addEventListener('click', () => { if (Date.now() >= suppressAccountClickUntil) void action(() => window.maxwebShell.select(account.id)); });
     bindAccountReorder(row, button, account.id);
@@ -89,7 +89,7 @@ function render(next) {
     if (account.unread) { const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = account.unread; row.append(badge); }
     $('accounts').append(row);
   }
-  $('version').textContent = `Maxweb ${state.version}`;
+  $('version').textContent = `Обла ${state.version}`;
   $('settings').setAttribute('aria-current', state.pane === 'settings' ? 'page' : 'false');
   $('update-alert').hidden = !['available', 'downloading', 'ready'].includes(state.update.status);
   $('update-alert').textContent = state.update.status === 'ready' ? 'Обновление готово к установке ↗' : state.update.status === 'downloading' ? `Обновление · ${state.update.progress}%` : `Доступна версия ${state.update.version} ↗`;
@@ -125,7 +125,11 @@ $('account-form').addEventListener('submit', async event => {
   finally { $('save').disabled = false; }
 });
 function finishDrag() {
-  draggingId = null;
+  const drag = pointerDrag;
+  pointerDrag = null;
+  cancelAnimationFrame(dragFrame); dragFrame = 0;
+  drag?.preview?.remove();
+  if (drag?.button.hasPointerCapture(drag.pointerId)) drag.button.releasePointerCapture(drag.pointerId);
   document.body.classList.remove('reordering');
   for (const row of $('accounts').children) row.classList.remove('dragging', 'drop-before', 'drop-after');
 }
@@ -133,36 +137,83 @@ async function saveAccountOrder(ids, focusId) {
   const next = await window.maxwebShell.reorder(ids); render(next);
   if (focusId) [...$('accounts').querySelectorAll('.account-row')].find(row => row.dataset.accountId === focusId)?.querySelector('.account').focus();
 }
+function updatePointerDrop(drag) {
+  for (const row of $('accounts').children) row.classList.remove('drop-before', 'drop-after');
+  const bounds = $('accounts').getBoundingClientRect();
+  drag.target = null;
+  if (drag.x < bounds.left || drag.x > bounds.right || drag.y < bounds.top || drag.y > bounds.bottom) return;
+  const rows = [...$('accounts').children].filter(row => row.dataset.accountId !== drag.id);
+  const before = rows.find(row => drag.y < row.getBoundingClientRect().top + row.offsetHeight / 2);
+  const target = before || rows.at(-1);
+  if (!target) return;
+  drag.target = { id: target.dataset.accountId, after: !before };
+  target.classList.add(before ? 'drop-before' : 'drop-after');
+}
+function followPointerDrag() {
+  const drag = pointerDrag;
+  if (!drag?.active) return;
+  drag.preview.style.top = `${drag.y - drag.offsetY}px`;
+  const bounds = $('accounts').getBoundingClientRect();
+  if (drag.x >= bounds.left && drag.x <= bounds.right && drag.y >= bounds.top && drag.y <= bounds.bottom) {
+    if (drag.y < bounds.top + 24) $('accounts').scrollTop -= 6;
+    else if (drag.y > bounds.bottom - 24) $('accounts').scrollTop += 6;
+  }
+  updatePointerDrop(drag);
+  dragFrame = requestAnimationFrame(followPointerDrag);
+}
+function cancelPointerDrag() {
+  if (!pointerDrag) return;
+  if (pointerDrag.active) suppressAccountClickUntil = Date.now() + 250;
+  finishDrag(); render(state);
+}
+document.addEventListener('pointermove', event => {
+  const drag = pointerDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  drag.x = event.clientX; drag.y = event.clientY;
+  if (!drag.active) {
+    if (Math.hypot(drag.x - drag.startX, drag.y - drag.startY) < 6) return;
+    drag.active = true; closeForm();
+    const rect = drag.row.getBoundingClientRect();
+    drag.offsetY = drag.startY - rect.top;
+    const preview = drag.row.cloneNode(true); preview.removeAttribute('data-account-id');
+    preview.classList.add('account-drag-preview'); preview.setAttribute('aria-hidden', 'true'); preview.inert = true;
+    preview.style.width = `${rect.width}px`; preview.style.left = `${rect.left}px`;
+    document.body.append(preview); drag.preview = preview;
+    drag.row.classList.add('dragging'); document.body.classList.add('reordering');
+    followPointerDrag();
+  }
+  event.preventDefault(); updatePointerDrop(drag);
+}, { passive: false });
+document.addEventListener('pointerup', event => {
+  const drag = pointerDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  if (!drag.active) {
+    finishDrag();
+    requestAnimationFrame(() => { if (!pointerDrag) render(state); });
+    return;
+  }
+  event.preventDefault(); drag.x = event.clientX; drag.y = event.clientY; updatePointerDrop(drag);
+  const target = drag.target;
+  const ids = state.accounts.map(account => account.id).filter(id => id !== drag.id);
+  suppressAccountClickUntil = Date.now() + 250; finishDrag();
+  if (!target || !state.accounts.some(account => account.id === drag.id)) { render(state); return; }
+  const index = ids.indexOf(target.id);
+  if (index < 0) { render(state); return; }
+  ids.splice(index + (target.after ? 1 : 0), 0, drag.id);
+  if (ids.every((id, i) => id === state.accounts[i].id)) { render(state); return; }
+  void action(() => saveAccountOrder(ids));
+});
+document.addEventListener('pointercancel', cancelPointerDrag);
+window.addEventListener('blur', cancelPointerDrag);
+document.addEventListener('keydown', event => { if (event.key === 'Escape') cancelPointerDrag(); });
 function bindAccountReorder(row, button, id) {
-  button.addEventListener('dragstart', event => {
-    if (state.locked) { event.preventDefault(); return; }
-    draggingId = id; closeForm();
-    event.dataTransfer.setData('application/x-maxweb-account', id); event.dataTransfer.effectAllowed = 'move';
-    row.classList.add('dragging'); document.body.classList.add('reordering');
+  button.addEventListener('dragstart', event => event.preventDefault());
+  button.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || !event.isPrimary || state.locked || pointerDrag) return;
+    pointerDrag = { id, row, button, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, active: false, preview: null };
+    button.setPointerCapture(event.pointerId);
   });
-  button.addEventListener('dragend', () => { suppressAccountClickUntil = Date.now() + 200; finishDrag(); render(state); });
-  row.addEventListener('dragover', event => {
-    if (!draggingId || draggingId === id) return;
-    event.preventDefault(); event.dataTransfer.dropEffect = 'move';
-    for (const item of $('accounts').children) item.classList.remove('drop-before', 'drop-after');
-    const after = event.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2;
-    row.classList.add(after ? 'drop-after' : 'drop-before');
-    const bounds = $('accounts').getBoundingClientRect();
-    if (event.clientY < bounds.top + 24) $('accounts').scrollTop -= 14;
-    else if (event.clientY > bounds.bottom - 24) $('accounts').scrollTop += 14;
-  });
-  row.addEventListener('dragleave', event => { if (!row.contains(event.relatedTarget)) row.classList.remove('drop-before', 'drop-after'); });
-  row.addEventListener('drop', event => {
-    if (!draggingId || !event.dataTransfer.types.includes('application/x-maxweb-account')) return;
-    event.preventDefault();
-    const source = draggingId, after = event.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2;
-    const ids = state.accounts.map(account => account.id).filter(accountId => accountId !== source);
-    const target = ids.indexOf(id);
-    suppressAccountClickUntil = Date.now() + 200; finishDrag();
-    if (target < 0) { render(state); return; }
-    ids.splice(target + (after ? 1 : 0), 0, source);
-    void action(() => saveAccountOrder(ids));
-  });
+  button.addEventListener('lostpointercapture', () => { if (pointerDrag?.button === button) cancelPointerDrag(); });
   button.addEventListener('keydown', event => {
     if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
     event.preventDefault(); event.stopPropagation();

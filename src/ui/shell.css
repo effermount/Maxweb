@@ -4,8 +4,7 @@ body { margin: 0; }
 aside { width: 220px; height: 100vh; display: flex; flex-direction: column; padding: 12px; border-right: 1px solid var(--border); }
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; margin-bottom: 22px; padding: 0 3px; flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.brand-mark { width: 26px; height: 26px; flex-shrink: 0; fill: var(--accent-text); }
-.brand-accent { fill: var(--accent); }
+.brand-mark { width: 32px; height: 32px; flex-shrink: 0; fill: none; stroke: var(--accent-text); stroke-width: 68; stroke-linecap: round; stroke-linejoin: round; }
 h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.5px; }
 .collapse { display: grid; place-items: center; width: 32px; height: 32px; padding: 6px; flex-shrink: 0; border-radius: 8px; color: var(--muted); }
 .collapse svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -132,3 +131,6 @@ form button.accent { background: var(--accent); color: white; }
 .account-row.drop-before::after { top: -3px; }
 .account-row.drop-after::after { bottom: -3px; }
 .reordering .account { cursor: grabbing; }
+
+.account { cursor: grab; touch-action: none; user-select: none; -webkit-user-drag: none; }
+.account-drag-preview { position: fixed; z-index: 100; pointer-events: none; margin: 0; background: var(--sidebar); border-radius: 12px; box-shadow: 0 8px 28px var(--shadow); opacity: .95; }

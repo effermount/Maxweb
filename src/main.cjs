@@ -5,6 +5,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { isServiceURL, isServiceAuthURL, isServiceNavigationURL, isExternalURL, mayUsePermission, unreadBadge } = require('./policy.cjs');
 const { serviceInfo } = require('./services.cjs');
+const { fetchAvatarBytes } = require('./avatar.cjs');
 const { createStore } = require('./store.cjs');
 const { newAccount, accountName, accountPartition, accountAvatar, reorderAccounts } = require('./accounts.cjs');
 const { normalizeRepository } = require('./update-core.cjs');
@@ -23,7 +24,7 @@ const vkOfflineURL = uiURL('offline-vk');
 const offlineFor = service => service === 'vk' ? vkOfflineURL : service === 'whatsapp' ? whatsappOfflineURL : service === 'telegram' ? telegramOfflineURL : offlineURL;
 const isOfflineURL = url => [offlineURL, telegramOfflineURL, whatsappOfflineURL, vkOfflineURL].includes(url);
 
-app.setName('Maxweb');
+require('./brand.cjs').configureBrand(app);
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('lang', 'ru');
@@ -89,7 +90,7 @@ function securityChanged() {
   if (security.locked) {
     clearNotifications(); closeAuthWindows();
     if (settingsView && !settingsView.webContents.isDestroyed()) settingsView.webContents.send('security:locked');
-    mainWindow?.setTitle('Maxweb — заблокировано');
+    mainWindow?.setTitle('Экран блокировки · Обла');
     mainWindow?.webContents.focus();
   }
   layout(); broadcast();
@@ -201,7 +202,7 @@ async function logoutAccount(id) {
     store.set({ accounts, activeAccountId: next });
     if (activePane === 'account' && next && !security.locked) selectAccount(next, false);
     else { layout(); broadcast(); }
-    if (!accounts.length && !security.locked) { mainWindow.setTitle('Maxweb'); mainWindow.webContents.focus(); }
+    if (!accounts.length && !security.locked) { mainWindow.setTitle('Обла'); mainWindow.webContents.focus(); }
     return shellState();
   } finally { loggingOut.delete(id); }
 }
@@ -242,7 +243,7 @@ function secureNavigation(contents, id) {
   contents.on('will-attach-webview', event => event.preventDefault());
 }
 function configureSession(ses, service = 'max') {
-  const userAgent = service === 'whatsapp' ? ses.getUserAgent().replace(/\s(?:Electron|Maxweb)\/[\w.-]+/g, '') : ses.getUserAgent();
+  const userAgent = service === 'whatsapp' ? ses.getUserAgent().replace(/\s(?:Electron|Maxweb|Obla|Обла)\/[\w.-]+/g, '') : ses.getUserAgent();
   ses.setUserAgent(userAgent, 'ru-RU,ru,en-US,en');
   const topURL = contents => contents && !contents.isDestroyed() ? contents.getURL() : '';
   ses.setPermissionCheckHandler((contents, permission, origin) => !isAuthContents(contents) && mayUsePermission(permission, origin, topURL(contents), preferences().notifications, service));
@@ -328,7 +329,7 @@ function showSettings() {
     settingsView.webContents.on('will-navigate', event => event.preventDefault());
     void settingsView.webContents.loadURL(settingsURL);
   }
-  activePane = 'settings'; layout(); mainWindow.setTitle('Настройки Maxweb'); showWindow(); broadcast();
+  activePane = 'settings'; layout(); mainWindow.setTitle('Настройки Обла'); showWindow(); broadcast();
   return settingsView;
 }
 function createMainWindow() {
@@ -336,7 +337,7 @@ function createMainWindow() {
   const visible = screen.getAllDisplays().some(({ workArea: a }) => saved.x !== undefined && saved.y !== undefined && saved.x + 100 > a.x && saved.x < a.x + a.width - 100 && saved.y + 100 > a.y && saved.y < a.y + a.height - 100);
   const area = screen.getPrimaryDisplay().workAreaSize;
   mainWindow = new BrowserWindow({
-    title: 'Maxweb', width: Math.min(saved.width, area.width), height: Math.min(saved.height, area.height),
+    title: 'Обла', width: Math.min(saved.width, area.width), height: Math.min(saved.height, area.height),
     ...(visible ? { x: saved.x, y: saved.y } : {}), minWidth: 1000, minHeight: 650,
     backgroundColor: themeBackground('shell'), show: false, webPreferences: localPreferences('shell-preload.cjs')
   });
@@ -368,7 +369,7 @@ function createMainWindow() {
 }
 function testNotification() {
   return new Promise((resolve, reject) => {
-    if (!preferences().notifications) return reject(new Error('Сначала включите уведомления в настройках Maxweb.'));
+    if (!preferences().notifications) return reject(new Error('Сначала включите уведомления в настройках Обла.'));
     if (!Notification.isSupported()) return reject(new Error('Уведомления недоступны в этой системе.'));
     const account = preferences().accounts.find(a => a.id === activeId()) || { name: 'Аккаунт MAX' };
     const notification = new Notification({ ...bannerContent(account, 'Отправитель MAX', 'Так будет выглядеть текст нового сообщения.', preferences().banner, security.locked) });
@@ -397,13 +398,24 @@ function bindIPC() {
     const authActivity = event.senderFrame === event.sender.mainFrame && [...authWindows].some(([id, windows]) => [...windows].some(window => !window.isDestroyed() && window.webContents === event.sender && isServiceNavigationURL(event.senderFrame.url, preferences().accounts.find(a => a.id === id)?.service)));
     if (senderAccount(event) || authActivity || trusted(mainWindow?.webContents, shellURL, event) || trusted(settingsView?.webContents, settingsURL, event)) security.activity();
   });
+  const avatarRequests = new Set();
+  ipcMain.handle('account:avatar', async (event, source) => {
+    const id = senderAccount(event);
+    if (!id || avatarRequests.has(id)) throw new Error('Avatar request unavailable');
+    const account = preferences().accounts.find(a => a.id === id);
+    if (!account) throw new Error('Account unavailable');
+    avatarRequests.add(id);
+    try { return await fetchAvatarBytes(source, account.service || 'max'); }
+    finally { avatarRequests.delete(id); }
+  });
   ipcMain.on('account:profile', (event, profile) => {
     const id = senderAccount(event);
     if (!id || !profile || typeof profile !== 'object') return;
     let name;
     try { name = accountName(profile.name); } catch { return; }
-    const avatar = accountAvatar(profile.avatar);
     const account = preferences().accounts.find(a => a.id === id);
+    // Missing image means not loaded yet; only an explicit empty string removes it.
+    const avatar = profile.avatar === '' ? '' : accountAvatar(profile.avatar) || account?.avatar || '';
     if (!account || account.profileName === name && (account.avatar || '') === avatar) return;
     store.set({ accounts: preferences().accounts.map(a => a.id === id ? { ...a, profileName: name, avatar, ...(!a.customName ? { name } : {}) } : a) });
     if (id === activeId() && !security.locked && activePane === 'account') mainWindow.setTitle(accountTitle(preferences().accounts.find(a => a.id === id)));
@@ -502,7 +514,7 @@ function bindIPC() {
   handle('settings:system', 'settings', () => shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension'));
   handle('settings:open', 'settings', () => {
     if (activeId()) return selectAccount(activeId());
-    activePane = 'account'; layout(); broadcast(); mainWindow.setTitle('Maxweb'); mainWindow.webContents.focus();
+    activePane = 'account'; layout(); broadcast(); mainWindow.setTitle('Обла'); mainWindow.webContents.focus();
   });
   handle('updates:configure', 'settings', (repository, autoCheck) => {
     if (typeof autoCheck !== 'boolean' || typeof repository !== 'string') throw new Error('Неверные настройки обновлений.');
@@ -521,14 +533,14 @@ async function checkUpdates() {
 function createMenu() {
   const notificationTest = () => testNotification().catch(error => dialog.showMessageBox({ type: 'warning', message: 'Не удалось показать уведомление', detail: error.message }));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'Maxweb', submenu: [
-      { label: 'О Maxweb', click: () => dialog.showMessageBox({ type: 'info', message: `Maxweb ${APP_VERSION}`, detail: 'Независимый клиент MAX, Telegram, WhatsApp и VK для Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
+    { label: 'Обла', submenu: [
+      { label: 'Об «Обла»', click: () => dialog.showMessageBox({ type: 'info', message: `Обла ${APP_VERSION}`, detail: 'Независимый клиент MAX, Telegram, WhatsApp и VK для Intel и Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
       { label: 'Проверить обновления…', click: checkUpdates },
-      { label: 'Заблокировать Maxweb', accelerator: 'CmdOrCtrl+L', click: () => security.lock() },
+      { label: 'Экран блокировки', accelerator: 'CmdOrCtrl+L', click: () => security.lock() },
       { label: 'Настройки…', accelerator: 'CmdOrCtrl+,', click: showSettings },
       { type: 'separator' }, { role: 'services', label: 'Службы' },
-      { type: 'separator' }, { role: 'hide', label: 'Скрыть Maxweb' }, { role: 'hideOthers', label: 'Скрыть остальные' }, { role: 'unhide', label: 'Показать все' },
-      { type: 'separator' }, { role: 'quit', label: 'Завершить Maxweb' }
+      { type: 'separator' }, { role: 'hide', label: 'Скрыть «Обла»' }, { role: 'hideOthers', label: 'Скрыть остальные' }, { role: 'unhide', label: 'Показать все' },
+      { type: 'separator' }, { role: 'quit', label: 'Завершить «Обла»' }
     ] },
     { label: 'Правка', submenu: [{ role: 'undo', label: 'Отменить' }, { role: 'redo', label: 'Повторить' }, { type: 'separator' }, { role: 'cut', label: 'Вырезать' }, { role: 'copy', label: 'Копировать' }, { role: 'paste', label: 'Вставить' }, { role: 'selectAll', label: 'Выбрать всё' }] },
     { label: 'Аккаунты', submenu: [
@@ -550,10 +562,10 @@ function createMenu() {
     { label: 'Помощь', submenu: [{ label: 'Проверить уведомления', click: notificationTest }, { label: 'Справка MAX', click: () => external('https://help.max.ru/') }] }
   ]));
   const image = nativeImage.createFromPath(path.join(__dirname, '../assets/trayTemplate.png')); image.setTemplateImage(true);
-  tray = new Tray(image); tray.setToolTip('Maxweb — все аккаунты работают в фоне');
+  tray = new Tray(image); tray.setToolTip('Обла — все аккаунты работают в фоне');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Открыть Maxweb', click: showWindow }, { label: 'Настройки и обновления…', click: showSettings },
-    { type: 'separator' }, { label: 'Завершить Maxweb', click: () => app.quit() }
+    { label: 'Открыть «Обла»', click: showWindow }, { label: 'Настройки и обновления…', click: showSettings },
+    { type: 'separator' }, { label: 'Завершить Обла', click: () => app.quit() }
   ]));
   tray.on('click', showWindow);
 }
@@ -587,7 +599,7 @@ const ready = hasLock ? app.whenReady().then(async () => {
     },
     decrypt: async value => (await safeStorage.decryptStringAsync(Buffer.from(value, 'base64'))).result,
     canTouchID: () => process.platform === 'darwin' && systemPreferences.canPromptTouchID(),
-    promptTouchID: () => systemPreferences.promptTouchID('разблокировать Maxweb'),
+    promptTouchID: () => systemPreferences.promptTouchID('открыть приложение «Обла»'),
     onChange: securityChanged
   });
   // Node's HTTP stack has no Chromium cookie jar. Its Fetch implementation also
@@ -603,7 +615,7 @@ const ready = hasLock ? app.whenReady().then(async () => {
       broadcast();
       if (state.status === 'available' && state.version !== notifiedVersion && app.isPackaged) {
         notifiedVersion = state.version;
-        const notification = new Notification({ title: 'Обновление Maxweb', body: `Доступна версия ${state.version}. Нажмите, чтобы скачать.` });
+        const notification = new Notification({ title: 'Обновление Обла', body: `Доступна версия ${state.version}. Нажмите, чтобы скачать.` });
         activeNotifications.add(notification);
         notification.on('click', showSettings);
         notification.on('close', () => activeNotifications.delete(notification));
@@ -627,7 +639,7 @@ const ready = hasLock ? app.whenReady().then(async () => {
     autoCheck();
   });
 }) : Promise.resolve();
-ready.catch(error => { dialog.showErrorBox('Не удалось запустить Maxweb', error.message); app.quit(); });
+ready.catch(error => { dialog.showErrorBox('Не удалось запустить Обла', error.message); app.quit(); });
 module.exports = {
   ready, showWindow, showSettings, loadMax, testNotification, addAccount, renameAccount, selectAccount, flushSessions,
   getMainWindow: () => mainWindow, getSession: (id = activeId()) => runtimes.get(id)?.session,

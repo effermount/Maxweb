@@ -1,6 +1,10 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 if (['https://web.max.ru', 'https://web.telegram.org', 'https://web.whatsapp.com', 'https://web.vk.me'].includes(location.origin)) {
+  if (location.origin !== 'https://web.max.ru') contextBridge.exposeInMainWorld('__maxwebProfile', {
+    send: profile => ipcRenderer.send('account:profile', profile),
+    readAvatar: source => ipcRenderer.invoke('account:avatar', source)
+  });
   contextBridge.exposeInMainWorld('__maxwebNotifications', {
     send: request => ipcRenderer.send('account:notification', request),
     onEvent: callback => ipcRenderer.on('account:notification-event', (_event, value) => callback(value))
@@ -51,15 +55,16 @@ if (location.origin === 'https://web.max.ru') {
   let readingProfile = false, lastProfile = '', lastAvatarURL = '', avatar = '', avatarRetryAt = 0;
   async function profileAvatar(baseURL) {
     if (!baseURL) { lastAvatarURL = ''; avatar = ''; return ''; }
-    if (baseURL === lastAvatarURL && (avatar || Date.now() < avatarRetryAt)) return avatar;
+    if (baseURL === lastAvatarURL && (avatar || Date.now() < avatarRetryAt)) return avatar || undefined;
     if (baseURL !== lastAvatarURL) avatar = '';
     lastAvatarURL = baseURL; avatarRetryAt = Date.now() + 60000;
     try {
       const url = new URL(baseURL);
-      if (url.protocol !== 'https:' || url.username || url.password) return '';
+      if (url.protocol !== 'https:' || url.username || url.password) return undefined;
       url.searchParams.set('fn', 'sqr_128');
-      const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
-      if (!response.ok || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) return '';
+      const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) })
+        .catch(async () => new Response(await ipcRenderer.invoke('account:avatar', url.href)));
+      if (!response.ok || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) return undefined;
       const reader = response.body.getReader();
       const chunks = []; let size = 0;
       try {
@@ -67,7 +72,7 @@ if (location.origin === 'https://web.max.ru') {
           const { done, value } = await reader.read();
           if (done) break;
           size += value.length;
-          if (size > 2 * 1024 * 1024) { await reader.cancel(); return ''; }
+          if (size > 2 * 1024 * 1024) { await reader.cancel(); return undefined; }
           chunks.push(value);
         }
       } finally { reader.releaseLock(); }
@@ -79,7 +84,7 @@ if (location.origin === 'https://web.max.ru') {
         avatar = canvas.toDataURL('image/png');
       } finally { bitmap.close(); }
       return avatar;
-    } catch { return ''; }
+    } catch { return undefined; }
   }
   async function syncProfile() {
     if (readingProfile) return;
@@ -229,9 +234,6 @@ if (location.origin === 'https://web.max.ru') {
 
 
 if (location.origin === 'https://web.telegram.org') {
-  contextBridge.exposeInMainWorld('__maxwebProfile', {
-    send: profile => ipcRenderer.send('account:profile', profile)
-  });
   contextBridge.executeInMainWorld({ func: () => {
     let busy = false, lastProfile = '', avatarKey = '', avatar = '';
     const bounded = async operation => {
@@ -257,8 +259,8 @@ if (location.origin === 'https://web.telegram.org') {
         if (!name || /[\x00-\x1f\x7f]/.test(name)) return;
         const key = `${user.id}:${user.photo?.photo_id || ''}`;
         if (key !== avatarKey) {
-          avatar = '';
-          publish(name, '');
+          publish(name, undefined);
+          let nextAvatar = '';
           if (user.photo?._ === 'userProfilePhoto') {
             const url = await bounded(managers.appAvatarsManager.loadAvatar(root.myId, user.photo, 'photo_small'));
             // Web K returns a local object URL for the downloaded own avatar.
@@ -271,11 +273,15 @@ if (location.origin === 'https://web.telegram.org') {
                   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
                   const edge = Math.min(bitmap.width, bitmap.height);
                   canvas.getContext('2d').drawImage(bitmap, (bitmap.width - edge) / 2, (bitmap.height - edge) / 2, edge, edge, 0, 0, 64, 64);
-                  avatar = canvas.toDataURL('image/png');
+                  nextAvatar = canvas.toDataURL('image/png');
                 } finally { bitmap.close(); }
               }
             }
+            // A missing URL or a temporary decode/download failure must be retried.
+            if (!nextAvatar) return;
           }
+          if (String(root.myId) !== String(user.id)) return;
+          avatar = nextAvatar;
           avatarKey = key;
         }
         // A Telegram account switch during an asynchronous photo load must not
@@ -290,9 +296,6 @@ if (location.origin === 'https://web.telegram.org') {
 }
 
 if (location.origin === 'https://web.whatsapp.com') {
-  contextBridge.exposeInMainWorld('__maxwebProfile', {
-    send: profile => ipcRenderer.send('account:profile', profile)
-  });
   contextBridge.executeInMainWorld({ func: () => {
     let busy = false, lastProfile = '', imageKey = '', image = '', retryAt = 0;
     const module = name => { try { return typeof window.require === 'function' ? window.require(name) : null; } catch { return null; } };
@@ -310,7 +313,8 @@ if (location.origin === 'https://web.whatsapp.com') {
       const local = url.protocol === 'blob:' && url.origin === location.origin;
       const remote = url.protocol === 'https:' && !url.username && !url.password && /(^|\.)(whatsapp\.net|whatsapp\.com|fbcdn\.net)$/.test(url.hostname);
       if (!local && !remote) throw new Error('Unexpected avatar origin');
-      const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
+      const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) })
+        .catch(async error => { if (local) throw error; return new Response(await window.__maxwebProfile.readAvatar(url.href)); });
       if (!response.ok || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) throw new Error('Avatar unavailable');
       const reader = response.body.getReader(); const chunks = []; let size = 0;
       try {
@@ -340,10 +344,11 @@ if (location.origin === 'https://web.whatsapp.com') {
         const name = (module('WAWebUserPrefsGeneral')?.getPushname?.() || module('WAWebConnModel')?.Conn?.pushname || '').trim().slice(0,40);
         if (!name || /[\x00-\x1f\x7f]/.test(name)) return;
         if (imageKey && !imageKey.startsWith(`${userID}:`)) { image = ''; imageKey = ''; retryAt = 0; }
-        publish(name, image);
+        publish(name, image || undefined);
         const store = module('WAWebProfilePicThumbCollection')?.ProfilePicThumb || module('WAWebCollections')?.ProfilePicThumb;
         let ownPhoto = store?.get?.(me);
-        if (!ownPhoto && store?.find) {
+        // find refreshes stale/incomplete cached thumbnails as well as missing ones.
+        if (store?.find) {
           let timer;
           try { ownPhoto = await Promise.race([store.find(me), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Own photo timeout')), 6000); })]); }
           finally { clearTimeout(timer); }
@@ -361,7 +366,7 @@ if (location.origin === 'https://web.whatsapp.com') {
             image = next; imageKey = key; retryAt = 0;
           }
         } else if (source === null && !ownPhoto.stale) { image = ''; imageKey = `${userID}:`; }
-        if (identity(ownID()) === userID) publish(name, image);
+        if (identity(ownID()) === userID) publish(name, imageKey ? image : undefined);
       } catch { /* Preserve the last known own profile if WhatsApp changes its internals. */ }
       finally { busy = false; }
     }
@@ -370,12 +375,9 @@ if (location.origin === 'https://web.whatsapp.com') {
 }
 
 if (location.origin === 'https://web.vk.me') {
-  contextBridge.exposeInMainWorld('__maxwebProfile', {
-    send: profile => ipcRenderer.send('account:profile', profile)
-  });
   contextBridge.executeInMainWorld({ func: () => {
     let busy = false, lastProfile = '', imageSource = '', image = '';
-    function publish(name) { const profile=JSON.stringify({name,avatar:image});if(profile!==lastProfile){lastProfile=profile;window.__maxwebProfile.send({name,avatar:image});} }
+    function publish(name, avatar = imageSource ? image : undefined) { const profile=JSON.stringify({name,avatar});if(profile!==lastProfile){lastProfile=profile;window.__maxwebProfile.send({name,avatar});} }
     const selfLabels = ['Мой профиль', 'Моя страница', 'Мой аккаунт', 'My profile', 'Your profile', 'My account'];
     async function syncVKProfile() {
       if (busy) return;
@@ -397,7 +399,8 @@ if (location.origin === 'https://web.vk.me') {
             const local = url.protocol === 'blob:' && url.origin === location.origin;
             const remote = url.protocol === 'https:' && !url.username && !url.password && /(^|\.)(vk\.me|vk\.ru|vk\.com|userapi\.com|vkuserphoto\.ru|vkuserphoto\.com)$/.test(url.hostname);
             if (!local && !remote) return;
-            const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
+            const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) })
+              .catch(async error => { if (local) throw error; return new Response(await window.__maxwebProfile.readAvatar(url.href)); });
             if (!response.ok || Number(response.headers.get('content-length')) > 2*1024*1024) return;
             const reader=response.body.getReader(), chunks=[];let size=0;
             try { while(true) { const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>2*1024*1024){await reader.cancel();return;}chunks.push(value); } }
@@ -413,7 +416,7 @@ if (location.origin === 'https://web.vk.me') {
         }
         // The DOM may have changed while the avatar was loading.
         if (!own.isConnected || (own.getAttribute('data-name') || own.querySelector('img')?.alt || '').trim().slice(0,40) !== name) return;
-        publish(name);
+        publish(name, image);
       } catch { /* Keep the saved name/avatar when VK does not expose its own profile in the UI. */ }
       finally { busy=false; }
     }

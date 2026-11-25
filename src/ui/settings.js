@@ -16,7 +16,7 @@ async function init() {
     $('login').checked = state.openAtLogin;
     $('login').disabled = !state.packaged;
     if (!state.packaged) $('login-hint').textContent = 'Доступно после установки приложения';
-    $('version').textContent = `Maxweb ${state.version} · ${state.arch === 'arm64' ? 'Apple Silicon' : state.arch}`;
+    $('version').textContent = `Обла ${state.version} · ${state.arch === 'arm64' ? 'Apple Silicon' : state.arch === 'x64' ? 'Intel' : state.arch}`;
     $('repository').value = state.updates.repository;
     $('auto-update').checked = state.updates.autoCheck;
     renderUpdate(state.update);
@@ -41,7 +41,7 @@ $('test').addEventListener('click', async () => {
   status('Отправляем пробное уведомление…');
   try {
     const result = await window.maxweb.test();
-    status(result.delivered ? 'macOS приняла уведомление. Если баннер не виден, проверьте «Фокусирование» и настройки macOS.' : 'Баннер не подтверждён. Разрешите уведомления для Maxweb в настройках macOS.');
+    status(result.delivered ? 'macOS приняла уведомление. Если баннер не виден, проверьте «Фокусирование» и настройки macOS.' : 'Баннер не подтверждён. Разрешите уведомления для приложения «Обла» в настройках macOS.');
   } catch (error) { status(error.message, true); }
   finally { $('test').disabled = false; }
 });
@@ -51,7 +51,7 @@ function renderUpdate(state) {
   const busy = ['checking', 'downloading', 'installing'].includes(state.status);
   $('update-message').textContent = state.message;
   $('update-message').classList.toggle('error', state.status === 'error');
-  $('update-title').textContent = state.version ? `Maxweb ${state.version}` : 'Обновления Maxweb';
+  $('update-title').textContent = state.version ? `Обла ${state.version}` : 'Обновления Обла';
   $('update-version').textContent = `Установлена ${state.currentVersion}`;
   $('update-check').disabled = busy;
   $('update-download').hidden = state.status !== 'available';
@@ -86,7 +86,7 @@ function renderBanner(value) {
   banner = value;
   for (const [key, id] of Object.entries(bannerIDs)) $(id).checked = banner[key];
   $('banner-text').disabled = !banner.showSender;
-  $('preview-title').textContent = banner.showSender ? 'Имя отправителя' : 'Maxweb';
+  $('preview-title').textContent = banner.showSender ? 'Имя отправителя' : 'Обла';
   $('preview-account').textContent = banner.showAccount ? 'Название вашего аккаунта' : '';
   $('preview-body').textContent = banner.showSender && banner.showText ? 'Так будет выглядеть текст сообщения' : 'Новое сообщение';
 }
@@ -154,7 +154,7 @@ window.maxweb.onLock(() => { for (const id of ['current-pin', 'new-pin', 'confir
 function renderTheme(state) {
   selectedTheme = state.source;
   $('theme').value = state.source;
-  $('theme-hint').textContent = state.source === 'system' ? `Как в macOS · сейчас ${state.dark ? 'тёмная' : 'светлая'}` : 'Выбрана вручную для Maxweb';
+  $('theme-hint').textContent = state.source === 'system' ? `Как в macOS · сейчас ${state.dark ? 'тёмная' : 'светлая'}` : 'Выбрана вручную';
 }
 $('theme').addEventListener('change', async () => {
   const previous = selectedTheme;

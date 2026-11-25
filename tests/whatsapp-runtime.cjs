@@ -39,7 +39,7 @@ client.ready.then(async () => {
  const whatsappID = client.getState().activeAccountId, whatsapp = client.getAccountContents(whatsappID), whatsappSession = client.getSession(whatsappID);
  await loaded(whatsapp);
  assert.equal(whatsapp.getURL(), 'https://web.whatsapp.com/');
- assert(!/Electron\/|Maxweb\//.test(whatsapp.getUserAgent()),'WhatsApp should use the actual Chromium browser identity');
+ assert(!/Electron\/|Maxweb\/|Obla\/|Обла\//.test(whatsapp.getUserAgent()),'WhatsApp should use the actual Chromium browser identity');
  assert(/Chrome\//.test(whatsapp.getUserAgent()));
  assert.notEqual(whatsappSession, client.getSession('default'));
  await wait(() => client.getState().accounts.find(a => a.id === whatsappID)?.avatar, 'own profile/avatar');
@@ -72,7 +72,7 @@ client.ready.then(async () => {
  client.getSecurity().lock(); assert.equal(client.getState().locked, true);
  await whatsapp.executeJavaScript('window.notify()'); await wait(() => client.getAccountNotifications().size === 1);
  const locked = [...client.getAccountNotifications().values()][0];
- assert.equal(locked.title, 'Maxweb'); assert.equal(locked.subtitle, ''); assert.equal(locked.body, 'Новое сообщение');
+ assert.equal(locked.title, 'Обла'); assert.equal(locked.subtitle, ''); assert.equal(locked.body, 'Новое сообщение');
  await assert.rejects(js(`window.maxwebShell.logout('${whatsappID}')`));
  await client.getSecurity().unlock('493725');
  const settings = client.showSettings().webContents; await loaded(settings);

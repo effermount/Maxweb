@@ -2,13 +2,13 @@
 <html lang="ru"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
-  <title>Maxweb</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="shell.css"><script src="shell.js" defer></script>
+  <title>Обла</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="shell.css"><script src="shell.js" defer></script>
 </head><body class="loading">
   <aside aria-label="Аккаунты мессенджеров">
     <header class="sidebar-header">
-      <div class="brand" aria-label="Maxweb">
-        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 25V7h4l9 11L25 7h4v18h-5V15l-8 10-8-10v10Z"/><path class="brand-accent" d="M24 28h5v2h-5Z"/></svg>
-        <h1>Maxweb</h1>
+      <div class="brand" aria-label="Обла">
+        <svg class="brand-mark" viewBox="0 0 1024 1024" aria-hidden="true"><path transform="translate(0 1024) scale(1 -1)" d="M592 350H347C272 350 217 407 217 478C217 544 264 597 327 605C345 687 414 740 499 740C584 740 654 687 671 609C747 604 807 546 807 471C807 404 761 350 695 350L633 290"/></svg>
+        <h1>Обла</h1>
       </div>
       <button id="collapse" class="collapse" title="Свернуть панель" aria-label="Свернуть панель" aria-expanded="true" aria-controls="accounts">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path class="collapse-chevron" d="m16 9-3 3 3 3"/></svg>
@@ -34,9 +34,9 @@
     <button id="add" class="add" title="Добавить аккаунт" aria-label="Добавить аккаунт"><span aria-hidden="true">＋</span><span class="add-label">Добавить аккаунт</span></button>
     <div class="bottom">
       <button id="update-alert" hidden>Доступно обновление <span aria-hidden="true">↗</span></button>
-      <button id="lock" class="settings" title="Заблокировать Maxweb · ⌘L" hidden><span aria-hidden="true">▣</span><span>Заблокировать</span></button>
+      <button id="lock" class="settings" title="Экран блокировки · ⌘L" hidden><span aria-hidden="true">▣</span><span>Экран блокировки</span></button>
       <button id="settings" class="settings" title="Настройки и обновления" aria-label="Настройки и обновления"><span aria-hidden="true">⚙</span><span>Настройки и обновления</span></button>
-      <footer><span id="version">Maxweb</span><span>Apple Silicon</span></footer>
+      <footer><span id="version">Обла</span><span>Intel · Apple Silicon</span></footer>
     </div>
   </aside>
 <main id="empty-state" hidden><section><h2>Добавьте аккаунт</h2><p>Выберите MAX, Telegram, WhatsApp или VK. Имя и фото появятся после входа.</p><button id="empty-add" class="touch-primary">Добавить аккаунт</button></section></main>
@@ -44,7 +44,7 @@
     <section class="lock-card">
       <img class="lock-logo" src="../../assets/icon.png" alt="" width="52" height="52">
       <p class="lock-eyebrow">ДОСТУП К АККАУНТАМ</p>
-      <h2 id="lock-title">Разблокировать Maxweb</h2>
+      <h2 id="lock-title">Разблокировать «Обла»</h2>
       <p id="lock-description">Введите код доступа</p>
       <button id="touch-id" class="touch-primary" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5a7 7 0 0 1 11 6v3M5 8a7 7 0 0 0-1 4v3M8 20c2-3 2-5 2-8a2 2 0 0 1 4 0c0 5-1 8-3 10M7 16v-4a5 5 0 0 1 10 0c0 4-.5 7-2 10M20 18l-1 3M4 19l-1 2"/></svg><span id="touch-id-label">Разблокировать с Touch ID</span></button>
       <div id="code-divider" class="code-divider" hidden><span>или используйте код</span></div>

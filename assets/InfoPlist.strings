@@ -1,0 +1,4 @@
+/* Finder localizes the name only if the raw CFBundleDisplayName matches the
+   filename (Maxweb). Keep that raw name and CFBundleName stable for updates
+   and Keychain, and use this localized display name for users. */
+CFBundleDisplayName = "Обла";

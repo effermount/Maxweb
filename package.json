@@ -1,11 +1,11 @@
 {
   "name": "maxweb",
-  "productName": "Maxweb",
-  "version": "1.2.12",
-  "description": "Клиент MAX, Telegram, WhatsApp и VK на Mac с Apple Silicon",
+  "productName": "Обла",
+  "version": "1.2.14",
+  "description": "Обла — MAX, Telegram, WhatsApp и VK в одном приложении",
   "private": true,
   "main": "src/main.cjs",
-  "author": "Maxweb",
+  "author": "Обла",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -15,9 +15,9 @@
     "test:github": "electron tests/github-runtime.cjs",
     "icons": "swift scripts/icons.swift",
     "prebuild": "node scripts/prepare-build.cjs",
-    "build": "electron-builder --mac dir --arm64",
+    "build": "electron-builder --mac dir --universal",
     "predist": "node scripts/prepare-build.cjs",
-    "dist": "electron-builder --mac dmg --arm64",
+    "dist": "electron-builder --mac dmg --universal",
     "postdist": "node scripts/release.cjs",
     "release:files": "node scripts/release.cjs",
     "publish:release": "node scripts/publish-release.cjs",
@@ -38,7 +38,7 @@
   "build": {
     "appId": "local.maxweb.desktop",
     "productName": "Maxweb",
-    "artifactName": "${productName}-${version}-apple-silicon.${ext}",
+    "artifactName": "Obla-${version}-universal.${ext}",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -50,13 +50,12 @@
       "package.json"
     ],
     "asar": true,
-    "electronDist": "node_modules/electron/dist",
     "mac": {
       "target": [
         {
           "target": "dmg",
           "arch": [
-            "arm64"
+            "universal"
           ]
         }
       ],
@@ -73,13 +72,24 @@
           "ru",
           "en"
         ],
-        "NSCameraUsageDescription": "Камера используется для видеозвонков в MAX после вашего разрешения.",
-        "NSMicrophoneUsageDescription": "Микрофон используется для звонков и голосовых сообщений в MAX после вашего разрешения.",
-        "NSUserNotificationAlertStyle": "alert"
-      }
+        "NSCameraUsageDescription": "Камера используется для видеозвонков в мессенджерах после вашего разрешения.",
+        "NSMicrophoneUsageDescription": "Микрофон используется для звонков и голосовых сообщений после вашего разрешения.",
+        "NSUserNotificationAlertStyle": "alert",
+        "LSHasLocalizedDisplayName": true
+      },
+      "extraResources": [
+        {
+          "from": "assets/InfoPlist.strings",
+          "to": "ru.lproj/InfoPlist.strings"
+        },
+        {
+          "from": "assets/InfoPlist.strings",
+          "to": "en.lproj/InfoPlist.strings"
+        }
+      ]
     },
     "dmg": {
-      "title": "Установка Maxweb",
+      "title": "Установка «Обла»",
       "background": "assets/dmg-background.png",
       "window": {
         "width": 600,

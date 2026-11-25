@@ -14,14 +14,20 @@ client.ready.then(async()=>{
  const order=()=>client.getState().accounts.map(a=>a.id);
  await wait(()=>js('document.querySelectorAll(".account-row").length===4'));
  const colors=await js('Object.fromEntries([...document.querySelectorAll(".account-row")].map(r=>[r.dataset.accountId,getComputedStyle(r.querySelector(".avatar")).backgroundColor]))');
- const drag=async(source,target,after)=>js(`(()=>{
-  const rows=[...document.querySelectorAll('.account-row')],source=rows.find(r=>r.dataset.accountId===${JSON.stringify(source)}).querySelector('.account'),target=rows.find(r=>r.dataset.accountId===${JSON.stringify(target)}),rect=target.getBoundingClientRect(),data=new DataTransfer();
-  source.dispatchEvent(new DragEvent('dragstart',{bubbles:true,cancelable:true,dataTransfer:data}));
-  const clientY=${after?'rect.bottom-2':'rect.top+2'};
-  target.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:data,clientY}));
-  target.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data,clientY}));
-  source.dispatchEvent(new DragEvent('dragend',{bubbles:true,dataTransfer:data}));
+ // Native mouse dragging is checked separately in the isolated desktop preview.
+ // Only capture bookkeeping is replaced in this deterministic gesture regression.
+ await js(`HTMLElement.prototype.setPointerCapture=function(id){this.__capture=id};HTMLElement.prototype.hasPointerCapture=function(id){return this.__capture===id};HTMLElement.prototype.releasePointerCapture=function(){this.__capture=undefined};void 0`);
+ const gesture=async(source,target,after,finish='drop')=>js(`(()=>{
+  const rows=[...document.querySelectorAll('#accounts .account-row')],source=rows.find(r=>r.dataset.accountId===${JSON.stringify(source)}).querySelector('.account'),target=rows.find(r=>r.dataset.accountId===${JSON.stringify(target)}),rect=target.getBoundingClientRect(),start=source.getBoundingClientRect();
+  const down={pointerId:7,pointerType:'mouse',isPrimary:true,button:0,buttons:1,bubbles:true,cancelable:true,clientX:start.left+start.width/2,clientY:start.top+start.height/2};
+  source.dispatchEvent(new PointerEvent('pointerdown',down));
+  const position={...down,clientY:${after?'rect.bottom-2':'rect.top+2'}};
+  document.dispatchEvent(new PointerEvent('pointermove',position));
+  if(${JSON.stringify(finish)}==='escape')document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  else if(${JSON.stringify(finish)}==='outside')position.clientX=document.querySelector('#accounts').getBoundingClientRect().right+100;
+  document.dispatchEvent(new PointerEvent('pointerup',{...position,buttons:0}));
  })()`);
+ const drag=(source,target,after)=>gesture(source,target,after);
  await drag(ids[3],ids[0],false);await wait(()=>order()[0]===ids[3]);
  assert.deepEqual(order(),[ids[3],ids[0],ids[1],ids[2]]);
  assert.equal(client.getState().activeAccountId,active,'Moving must not select a different account');
@@ -36,12 +42,24 @@ client.ready.then(async()=>{
  assert.match(await js('document.querySelector(".account").title'),/⌘1/);
  await assert.rejects(js(`window.maxwebShell.reorder(${JSON.stringify([ids[0],ids[0],ids[2],ids[3]])})`));
  const preserved=order();
- await client.getSecurity().configure({pin:'493725',confirmPIN:'493725',touchID:false,idleSeconds:0});client.getSecurity().lock();
+ await gesture(preserved[0],preserved[3],true,'escape');
+ await gesture(preserved[0],preserved[3],true,'outside');
+ assert.deepEqual(order(),preserved,'Escape and dropping outside must preserve the order');
+ assert.equal(await js('document.querySelector(".account-drag-preview")===null'),true,'Cancel must remove the floating card');
+ await client.getSecurity().configure({pin:'493725',confirmPIN:'493725',touchID:false,idleSeconds:0});
+ await js(`(()=>{const b=document.querySelector('#accounts .account'),r=b.getBoundingClientRect(),e={pointerId:9,isPrimary:true,pointerType:'mouse',button:0,buttons:1,bubbles:true,cancelable:true,clientX:r.left+20,clientY:r.top+20};b.dispatchEvent(new PointerEvent('pointerdown',e));document.dispatchEvent(new PointerEvent('pointermove',{...e,clientY:e.clientY+40}));})()`);
+ assert.equal(await js('!!document.querySelector(".account-drag-preview")'),true);
+ client.getSecurity().lock();
+ await wait(()=>js('document.querySelector(".account-drag-preview")===null && document.querySelectorAll("#accounts .account").length===0'));
+
  await assert.rejects(js(`window.maxwebShell.reorder(${JSON.stringify(ids)})`));
  await client.getSecurity().unlock('493725');assert.deepEqual(order(),preserved);
  const accountsMenu=Menu.getApplicationMenu().items.find(item=>item.label==='Аккаунты').submenu;
  accountsMenu.items[0].click();assert.equal(client.getState().activeAccountId,preserved[0],'Keyboard account positions must follow the saved order');
- console.log('PASS: drag before/after in both sidebar modes, keyboard reorder, saved order, stable selection/sessions/colors, updated shortcuts and malformed/locked rejection');
+ await new Promise(r=>setTimeout(r,260));
+ await js('document.querySelectorAll("#accounts .account")[1].click()');
+ await wait(()=>client.getState().activeAccountId===preserved[1]);
+ console.log('PASS: pointer dragging before/after in both modes, Escape/outside cancellation, saved order, stable sessions/colors/selection, normal click, shortcuts and malformed/locked rejection');
  clearTimeout(timer);setTimeout(()=>app.exit(0),2000).unref();app.quit();
 }).catch(error=>{console.error(error);app.exit(1)});
 app.on('will-quit',()=>fs.rmSync(profile,{recursive:true,force:true}));

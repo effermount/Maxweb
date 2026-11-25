@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { generateKeyPairSync, sign, createHash } = require('node:crypto');
-const { compareVersions, normalizeRepository, canonicalManifest, verifyManifest, downloadVerified, githubRelease } = require('../src/update-core.cjs');
+const { compareVersions, normalizeRepository, canonicalManifest, verifyManifest, downloadVerified, githubRelease, matchesMacBinary } = require('../src/update-core.cjs');
 const { Updater } = require('../src/updater.cjs');
 const keys = generateKeyPairSync('ed25519');
 function signed(data = Buffer.from('release archive'), extra = {}) {
@@ -33,7 +33,7 @@ test('release signature binds version, architecture, download URL and checksum',
   const other = generateKeyPairSync('ed25519');
   assert.throws(() => verifyManifest(manifest, other.publicKey, url), /Подпись/);
   assert.throws(() => verifyManifest(signed(undefined, { url: 'http://example.com/app.zip' }), keys.publicKey, url), /HTTPS/);
-  assert.throws(() => verifyManifest(signed(undefined, { arch: 'x64' }), keys.publicKey, url), /Apple Silicon/);
+  assert.throws(() => verifyManifest(signed(undefined, { arch: 'x64' }), keys.publicKey, url, { arch: 'arm64' }), /архитектуры/);
 });
 test('download validates bytes, rejects tampering and removes incomplete files', async t => {
   const dir = temp(t), body = Buffer.from('signed release');
@@ -59,6 +59,49 @@ test('GitHub release discovery follows only HTTPS redirects and uses signed asse
   const found = await githubRelease('user/Maxweb', { fetchImpl });
   assert.equal(found.manifest.version, '1.2.0'); assert.equal(calls.length, 2);
   await assert.rejects(githubRelease('user/Maxweb', { fetchImpl: async () => new Response(null, { status: 302, headers: { location: 'http://insecure.test/' } }) }), /Небезопасный/);
+});
+test('Universal manifests support both Macs while single-architecture releases stay restricted', () => {
+  const url = 'https://github.com/user/Maxweb/releases/download/v1.2.0/latest-mac.json';
+  for (const arch of ['arm64', 'x64']) {
+    assert.equal(verifyManifest(signed(undefined, { arch: 'universal' }), keys.publicKey, url, { arch }).arch, 'universal');
+    assert.equal(verifyManifest(signed(undefined, { arch }), keys.publicKey, url, { arch }).arch, arch);
+    assert.throws(() => verifyManifest(signed(undefined, { arch: arch === 'arm64' ? 'x64' : 'arm64' }), keys.publicKey, url, { arch }), /архитектуры/);
+    assert(matchesMacBinary('x86_64 arm64\n', 'universal', arch));
+    assert.equal(matchesMacBinary('arm64', 'universal', arch), false);
+    assert.equal(matchesMacBinary('x86_64', 'universal', arch), false);
+  }
+  assert(matchesMacBinary('x86_64', 'x64', 'x64'));
+  assert(matchesMacBinary('x86_64 arm64', 'arm64', 'arm64'), 'Legacy ARM64 clients can install the Universal archive');
+  assert.equal(matchesMacBinary('arm64', 'x64', 'x64'), false);
+  assert.throws(() => verifyManifest(signed(undefined, { arch: 'universal' }), keys.publicKey, url, { arch: 'ia32' }), /архитектуры/);
+  assert.throws(() => verifyManifest(signed(undefined, { platform: 'win32', arch: 'universal' }), keys.publicKey, url), /архитектуры/);
+});
+test('new clients prefer the Universal feed over the legacy ARM64 compatibility feed', async () => {
+  const base = 'https://github.com/user/Maxweb/releases/download/v1.2.0/';
+  const calls = [];
+  const found = await githubRelease('user/Maxweb', { fetchImpl: async url => {
+    calls.push(url);
+    if (url.endsWith('/releases/latest')) return Response.json({ assets: ['latest.json', 'latest-mac.json'].map(name => ({ name, browser_download_url: base + name })) });
+    assert.equal(url, base + 'latest-mac.json');
+    return Response.json(signed(undefined, { arch: 'universal' }));
+  } });
+  assert.equal(found.manifest.arch, 'universal'); assert.equal(calls.length, 2);
+});
+test('Intel updater accepts a signed Universal archive and rejects an ARM64-only feed', async t => {
+  const dir = temp(t), body = Buffer.from('Universal archive');
+  fs.writeFileSync(path.join(dir, 'Maxweb.zip'), body);
+  const feed = path.join(dir, 'latest-mac.json');
+  fs.writeFileSync(feed, JSON.stringify(signed(body, { arch: 'universal' })));
+  const updater = new Updater({ arch: 'x64', version: '1.1.0', directory: path.join(dir, 'cache'), publicKey: keys.publicKey, getSettings: () => ({}) });
+  assert.equal((await updater.check(pathToFileURL(feed))).status, 'available');
+  assert.equal((await updater.download()).status, 'ready');
+  const armFeed = path.join(dir, 'latest.json');
+  fs.writeFileSync(armFeed, JSON.stringify(signed(body)));
+  const intel = new Updater({ arch: 'x64', version: '1.1.0', directory: dir, publicKey: keys.publicKey, getSettings: () => ({}) });
+  await assert.rejects(intel.check(pathToFileURL(armFeed)), /архитектуры/);
+  const currentIntel = new Updater({ arch: 'x64', version: '1.3.0', directory: dir, publicKey: keys.publicKey, getSettings: () => ({}) });
+  assert.equal((await currentIntel.check(pathToFileURL(armFeed))).status, 'current', 'An older ARM64-only GitHub release is not an error for a newer Intel app');
+  assert.equal(currentIntel.candidate, null);
 });
 test('updater reaches ready only after signed download and never downloads older releases', async t => {
   const dir = temp(t), body = Buffer.from('signed release');

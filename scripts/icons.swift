@@ -13,19 +13,24 @@ func render(size: Int, tray: Bool = false) throws -> Data {
     context.scaleBy(x: CGFloat(size) / 1024, y: CGFloat(size) / 1024)
     if !tray {
         let tile = NSBezierPath(roundedRect: NSRect(x: 48, y: 48, width: 928, height: 928), xRadius: 218, yRadius: 218)
-        NSGradient(starting: NSColor(srgbRed: 0.22, green: 0.28, blue: 0.62, alpha: 1), ending: NSColor(srgbRed: 0.07, green: 0.10, blue: 0.24, alpha: 1))!.draw(in: tile, angle: -70)
+        NSGradient(colors: [NSColor(srgbRed: 0.64, green: 0.48, blue: 0.92, alpha: 1), NSColor(srgbRed: 0.50, green: 0.33, blue: 0.87, alpha: 1), NSColor(srgbRed: 0.27, green: 0.20, blue: 0.42, alpha: 1)])!.draw(in: tile, angle: -65)
     }
-    // A geometric M, without speech bubbles or dots resembling another messenger.
+    // One open cloud contour: airy, legible at small sizes, with a conversation tail.
+    // Coordinates are shared with the inline sidebar mark (SVG flips the Y axis).
     let mark = NSBezierPath()
-    let points = [NSPoint(x: 236, y: 300), NSPoint(x: 236, y: 724), NSPoint(x: 328, y: 724), NSPoint(x: 512, y: 486), NSPoint(x: 696, y: 724), NSPoint(x: 788, y: 724), NSPoint(x: 788, y: 300), NSPoint(x: 674, y: 300), NSPoint(x: 674, y: 526), NSPoint(x: 512, y: 326), NSPoint(x: 350, y: 526), NSPoint(x: 350, y: 300)]
-    mark.move(to: points[0]); for point in points.dropFirst() { mark.line(to: point) }; mark.close()
-    if tray {
-        NSColor.black.setFill(); mark.fill()
-    } else {
-        NSColor.white.setFill(); mark.fill()
-        let accent = NSBezierPath(roundedRect: NSRect(x: 674, y: 214, width: 114, height: 36), xRadius: 18, yRadius: 18)
-        NSColor(srgbRed: 0.35, green: 0.88, blue: 0.84, alpha: 1).setFill(); accent.fill()
-    }
+    mark.move(to: NSPoint(x: 592, y: 350))
+    mark.line(to: NSPoint(x: 347, y: 350))
+    mark.curve(to: NSPoint(x: 217, y: 478), controlPoint1: NSPoint(x: 272, y: 350), controlPoint2: NSPoint(x: 217, y: 407))
+    mark.curve(to: NSPoint(x: 327, y: 605), controlPoint1: NSPoint(x: 217, y: 544), controlPoint2: NSPoint(x: 264, y: 597))
+    mark.curve(to: NSPoint(x: 499, y: 740), controlPoint1: NSPoint(x: 345, y: 687), controlPoint2: NSPoint(x: 414, y: 740))
+    mark.curve(to: NSPoint(x: 671, y: 609), controlPoint1: NSPoint(x: 584, y: 740), controlPoint2: NSPoint(x: 654, y: 687))
+    mark.curve(to: NSPoint(x: 807, y: 471), controlPoint1: NSPoint(x: 747, y: 604), controlPoint2: NSPoint(x: 807, y: 546))
+    mark.curve(to: NSPoint(x: 695, y: 350), controlPoint1: NSPoint(x: 807, y: 404), controlPoint2: NSPoint(x: 761, y: 350))
+    mark.line(to: NSPoint(x: 633, y: 290))
+    mark.lineWidth = tray ? 76 : 58
+    mark.lineCapStyle = .round; mark.lineJoinStyle = .round
+    (tray ? NSColor.black : NSColor(srgbRed: 0.98, green: 0.97, blue: 1, alpha: 1)).setStroke()
+    mark.stroke()
     NSGraphicsContext.restoreGraphicsState()
     return bitmap.representation(using: .png, properties: [:])!
 }
@@ -54,12 +59,12 @@ func text(_ value: String, y: CGFloat, font: NSFont, color: NSColor) {
     let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
     (value as NSString).draw(in: NSRect(x: 30, y: y, width: 540, height: 40), withAttributes: [.font: font, .foregroundColor: color, .paragraphStyle: paragraph])
 }
-text("Maxweb", y: 323, font: .systemFont(ofSize: 28, weight: .bold), color: NSColor(srgbRed: 0.18, green: 0.12, blue: 0.30, alpha: 1))
+text("Обла", y: 323, font: .systemFont(ofSize: 28, weight: .bold), color: NSColor(srgbRed: 0.18, green: 0.12, blue: 0.30, alpha: 1))
 let captionColor = NSColor(srgbRed: 0.48, green: 0.44, blue: 0.55, alpha: 1)
-text("Перетащите Maxweb в «Программы»", y: 291, font: .systemFont(ofSize: 14), color: captionColor)
+text("Перетащите «Обла» в «Программы»", y: 291, font: .systemFont(ofSize: 14), color: captionColor)
 text("→", y: 201, font: .systemFont(ofSize: 36, weight: .light), color: NSColor(srgbRed: 0.56, green: 0.41, blue: 0.78, alpha: 1))
-text("APPLE SILICON  ·  macOS 13+", y: 56, font: .systemFont(ofSize: 10, weight: .medium), color: captionColor)
-text("После установки откройте Maxweb и войдите в MAX", y: 30, font: .systemFont(ofSize: 11), color: captionColor)
+text("INTEL + APPLE SILICON  ·  macOS 13+", y: 56, font: .systemFont(ofSize: 10, weight: .medium), color: captionColor)
+text("Все разговоры — в одном месте", y: 30, font: .systemFont(ofSize: 11), color: captionColor)
 NSGraphicsContext.restoreGraphicsState()
 background.size = NSSize(width: 600, height: 420)
 try background.representation(using: .png, properties: [:])!.write(to: assets.appendingPathComponent("dmg-background.png"))

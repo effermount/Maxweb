@@ -147,7 +147,7 @@ client.ready.then(async () => {
  await primary.executeJavaScript('window.lockNotice=new Notification("Bob",{body:"Very private"}); window.lockClicks=0; window.lockNotice.onclick=()=>window.lockClicks++; void 0');
  await waitFor(() => client.getAccountNotifications().size > 0, 'Locked banner missing');
  notice = [...client.getAccountNotifications().values()].at(-1);
- assert.equal(notice.title, 'Maxweb'); assert.equal(notice.subtitle, ''); assert.equal(notice.body, 'Новое сообщение в MAX');
+ assert.equal(notice.title, 'Обла'); assert.equal(notice.subtitle, ''); assert.equal(notice.body, 'Новое сообщение в MAX');
  notice.emit('click');
  assert.equal(client.getState().locked, true); assert.equal(await primary.executeJavaScript('window.lockClicks'), 0);
  await pause(200);

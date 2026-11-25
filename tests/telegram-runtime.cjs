@@ -61,7 +61,7 @@ client.ready.then(async () => {
  client.getSecurity().lock(); assert.equal(client.getState().locked, true);
  await telegram.executeJavaScript('window.notify()'); await wait(() => client.getAccountNotifications().size === 1);
  const locked = [...client.getAccountNotifications().values()][0];
- assert.equal(locked.title, 'Maxweb'); assert.equal(locked.subtitle, ''); assert.equal(locked.body, 'Новое сообщение');
+ assert.equal(locked.title, 'Обла'); assert.equal(locked.subtitle, ''); assert.equal(locked.body, 'Новое сообщение');
  await assert.rejects(js(`window.maxwebShell.logout('${telegramID}')`));
  await client.getSecurity().unlock('493725');
  const settings = client.showSettings().webContents; await loaded(settings);

@@ -43,7 +43,7 @@ class AppSecurity {
     const seconds = this.settings().idleSeconds;
     if (!this.locked && seconds && this.now() - this.lastActivity >= seconds * 1000) this.lock();
   }
-  requireUnlocked() { if (this.locked) throw new Error('Сначала разблокируйте Maxweb.'); }
+  requireUnlocked() { if (this.locked) throw new Error('Сначала разблокируйте приложение «Обла».'); }
   async exclusive(operation) {
     if (this.busy) throw new Error('Дождитесь завершения проверки.');
     this.busy = true;

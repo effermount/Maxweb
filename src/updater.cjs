@@ -3,12 +3,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { promisify } = require('node:util');
 const { execFile, spawn } = require('node:child_process');
-const { compareVersions, normalizeRepository, verifyManifest, githubRelease, readJSON, downloadVerified } = require('./update-core.cjs');
+const { compareVersions, normalizeRepository, verifyManifest, githubRelease, readJSON, downloadVerified, matchesMacBinary, supportsMacArchitecture } = require('./update-core.cjs');
 const run = promisify(execFile);
 
 class Updater {
-  constructor({ version, directory, publicKey, getSettings, onChange, fetchImpl, packaged = false, executable = process.execPath, bundleId = 'local.maxweb.desktop', beforeInstall = async () => {}, quit = () => {} }) {
-    Object.assign(this, { version, directory, publicKey, getSettings, onChange, fetchImpl, packaged, executable, bundleId, beforeInstall, quit });
+  constructor({ version, directory, publicKey, getSettings, onChange, fetchImpl, packaged = false, executable = process.execPath, bundleId = 'local.maxweb.desktop', beforeInstall = async () => {}, quit = () => {}, arch = process.arch }) {
+    Object.assign(this, { version, directory, publicKey, getSettings, onChange, fetchImpl, packaged, executable, bundleId, beforeInstall, quit, arch });
     this.state = { status: 'idle', currentVersion: version, progress: 0, message: 'Проверьте наличие новой версии.' };
     this.candidate = null;
     this.archive = null;
@@ -33,11 +33,14 @@ class Updater {
       const release = sourceOverride
         ? { manifest: await readJSON(sourceOverride, { ...options, allowFile: true }), manifestURL: sourceOverride }
         : await githubRelease(normalizeRepository(settings.repository), options);
-      const manifest = verifyManifest(release.manifest, this.publicKey, release.manifestURL, { allowFile: !!sourceOverride });
+      // Authenticate even old releases for another Mac architecture. They are
+      // harmless when already older; only a compatible newer one can be offered.
+      const manifest = verifyManifest(release.manifest, this.publicKey, release.manifestURL, { allowFile: !!sourceOverride, requireCompatible: false });
       if (compareVersions(manifest.version, this.version) <= 0) {
         this.candidate = null;
         return this.set({ status: 'current', version: null, notes: '', message: `Установлена актуальная версия ${this.version}.`, checkedAt: new Date().toISOString() });
       }
+      if (!supportsMacArchitecture(manifest.arch, this.arch)) throw new Error('Этот выпуск не предназначен для архитектуры этого Mac.');
       this.candidate = manifest;
       return this.set({ status: 'available', version: manifest.version, notes: manifest.notes, message: `Доступна версия ${manifest.version}.`, checkedAt: new Date().toISOString() });
     } catch (error) {
@@ -49,7 +52,7 @@ class Updater {
     if (this.busy || this.installing) return this.snapshot();
     if (!this.candidate || !['available', 'error'].includes(this.state.status)) throw new Error('Сначала проверьте наличие новой версии.');
     this.busy = true;
-    this.set({ status: 'downloading', progress: 0, message: `Загружаем Maxweb ${this.candidate.version}…` });
+    this.set({ status: 'downloading', progress: 0, message: `Загружаем «Обла» ${this.candidate.version}…` });
     try {
       this.archive = await downloadVerified(this.candidate, path.join(this.directory, `Maxweb-${this.candidate.version}.zip`), {
         fetchImpl: this.fetchImpl, allowFile: this.candidate.downloadURL.startsWith('file:'),
@@ -68,7 +71,7 @@ class Updater {
     let work;
     try {
       const target = path.resolve(path.dirname(this.executable), '../..');
-      if (path.basename(target) !== 'Maxweb.app' || (await fs.promises.lstat(target)).isSymbolicLink()) throw new Error('Установите Maxweb в «Программы» перед обновлением.');
+      if (path.basename(target) !== 'Maxweb.app' || (await fs.promises.lstat(target)).isSymbolicLink()) throw new Error('Установите приложение «Обла» в «Программы» перед обновлением.');
       await fs.promises.access(path.dirname(target), fs.constants.W_OK);
       // Verify the archive again immediately before extraction.
       const crypto = require('node:crypto');
@@ -90,7 +93,7 @@ class Updater {
         run('/usr/libexec/PlistBuddy', ['-c', 'Print CFBundleShortVersionString', plist]),
         run('/usr/bin/lipo', ['-archs', path.join(staged, 'Contents/MacOS/Maxweb')])
       ]);
-      if (identifier.trim() !== this.bundleId || version.trim() !== this.candidate.version || !architectures.trim().split(/\s+/).includes('arm64')) throw new Error('Идентификатор, версия или архитектура приложения не совпадает с выпуском.');
+      if (identifier.trim() !== this.bundleId || version.trim() !== this.candidate.version || !matchesMacBinary(architectures, this.candidate.arch, this.arch)) throw new Error('Идентификатор, версия или архитектура приложения не совпадает с выпуском.');
       await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', staged]);
       const helper = path.join(work, 'install-update.sh');
       await fs.promises.copyFile(path.join(__dirname, 'install-update.sh'), helper);
@@ -119,7 +122,7 @@ class Updater {
       if (pending.version === this.version && pending.target === target && path.dirname(pending.work) === path.dirname(target) && /^\.maxweb-update-[A-Za-z0-9]{6}$/.test(path.basename(pending.work))) {
         await fs.promises.rm(pending.work, { recursive: true, force: true });
         await fs.promises.rm(file, { force: true });
-        this.set({ status: 'current', message: `Maxweb обновлён до версии ${this.version}. Все аккаунты сохранены.` });
+        this.set({ status: 'current', message: `Приложение «Обла» обновлено до версии ${this.version}. Все аккаунты сохранены.` });
       }
     } catch { /* There is no pending successful installation. */ }
   }
