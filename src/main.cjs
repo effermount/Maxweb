@@ -399,13 +399,32 @@ function bindIPC() {
     if (senderAccount(event) || authActivity || trusted(mainWindow?.webContents, shellURL, event) || trusted(settingsView?.webContents, settingsURL, event)) security.activity();
   });
   const avatarRequests = new Set();
+  const profileReports = new Map();
+  ipcMain.on('account:profile-status', (event, report) => {
+    const id = senderAccount(event);
+    const stages = ['max-db', 'max-record', 'max-source', 'max-error', 'tg-root', 'tg-model', 'tg-source', 'tg-url', 'tg-error', 'wa-store', 'wa-model', 'wa-source', 'wa-error', 'vk-model', 'vk-source', 'vk-error'];
+    if (!id || !report || !stages.includes(report.stage)) return;
+    // Local support flags only. No names, messenger IDs, URLs, message contents
+    // or error strings are accepted or written to disk.
+    const detail = {};
+    for (const key of ['hasName', 'hasSource', 'imageLoaded', 'hasLoader', 'hasStore', 'hasGetters', 'stale', 'hasRoot', 'hasId', 'hasUserManager', 'hasZeroIdentity', 'recordFound', 'hasRawSource']) if (typeof report[key] === 'boolean') detail[key] = report[key];
+    for (const key of ['sourceType', 'sourceProtocol', 'photoKind', 'errorName', 'errorCode']) if (typeof report[key] === 'string' && /^[A-Za-z0-9_-]{1,48}$/.test(report[key])) detail[key] = report[key];
+    for (const key of ['count', 'identityCount']) if (Number.isInteger(report[key]) && report[key] >= 0 && report[key] <= 1000) detail[key] = report[key];
+    if (Array.isArray(report.fields)) detail.fields = report.fields.filter(value => typeof value === 'string' && /^[A-Za-z_$][A-Za-z0-9_$-]{0,60}$/.test(value)).slice(0, 50);
+    const value = { account: id, service: preferences().accounts.find(a => a.id === id)?.service || 'max', stage: report.stage, ...detail };
+    const key = `${id}:${report.stage}`, json = JSON.stringify(value);
+    if (profileReports.get(key) === json) return;
+    profileReports.set(key, json);
+    try { fs.writeFileSync(path.join(app.getPath('userData'), 'profile-status.json'), JSON.stringify([...profileReports.values()].map(item => JSON.parse(item))), { mode: 0o600 }); } catch {}
+  });
   ipcMain.handle('account:avatar', async (event, source) => {
     const id = senderAccount(event);
     if (!id || avatarRequests.has(id)) throw new Error('Avatar request unavailable');
     const account = preferences().accounts.find(a => a.id === id);
     if (!account) throw new Error('Account unavailable');
     avatarRequests.add(id);
-    try { return await fetchAvatarBytes(source, account.service || 'max'); }
+    const userAgent = event.sender.getUserAgent();
+    try { return await fetchAvatarBytes(source, account.service || 'max', (url, options) => globalThis.fetch(url, { ...options, headers: { ...options.headers, 'User-Agent': userAgent } })); }
     finally { avatarRequests.delete(id); }
   });
   ipcMain.on('account:profile', (event, profile) => {

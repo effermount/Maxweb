@@ -1,8 +1,39 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
+const profileStatus = (stage, detail) => ipcRenderer.send('account:profile-status', { stage, ...detail });
+function profileFailure(stage, name, message) {
+  const text = String(message || '');
+  const code = /HTTP (\d{3})/.exec(text)?.[1];
+  profileStatus(stage, { errorName: String(name || 'Error').replace(/[^A-Za-z]/g, '').slice(0, 40),
+    errorCode: code ? `http-${code}` : /origin/i.test(text) ? 'origin' : /taint|cross-origin|insecure/i.test(text) ? 'canvas-security' : /large|dimensions/i.test(text) ? 'dimensions' : /decode|ImageBitmap/i.test(text) ? 'decode' : /fetch|network|connection/i.test(text) ? 'network' : /timeout/i.test(text) ? 'timeout' : 'unknown' });
+}
+function localProfileAvatar(source) {
+  // img-src can allow local avatars while connect-src rejects fetch(blob:).
+  const url = new URL(source);
+  if (url.protocol !== 'blob:' || url.origin !== location.origin) throw new Error('Unexpected own avatar origin');
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const timer = setTimeout(() => { image.src = ''; reject(new Error('Avatar timeout')); }, 8000);
+    image.onerror = () => { clearTimeout(timer); reject(new Error('Avatar unavailable')); };
+    image.onload = () => {
+      clearTimeout(timer);
+      try {
+        if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth > 4096 || image.naturalHeight > 4096) throw new Error('Invalid avatar dimensions');
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+        const edge = Math.min(image.naturalWidth, image.naturalHeight);
+        canvas.getContext('2d').drawImage(image, (image.naturalWidth-edge)/2, (image.naturalHeight-edge)/2, edge, edge, 0, 0, 64, 64);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (error) { reject(error); }
+    };
+    image.src = url.href;
+  });
+}
 if (['https://web.max.ru', 'https://web.telegram.org', 'https://web.whatsapp.com', 'https://web.vk.me'].includes(location.origin)) {
   if (location.origin !== 'https://web.max.ru') contextBridge.exposeInMainWorld('__maxwebProfile', {
     send: profile => ipcRenderer.send('account:profile', profile),
+    localAvatar: source => localProfileAvatar(source),
+    status: (stage, detail) => profileStatus(stage, detail),
+    failure: (stage, name, message) => profileFailure(stage, name, message),
     readAvatar: source => ipcRenderer.invoke('account:avatar', source)
   });
   contextBridge.exposeInMainWorld('__maxwebNotifications', {
@@ -61,7 +92,7 @@ if (location.origin === 'https://web.max.ru') {
     try {
       const url = new URL(baseURL);
       if (url.protocol !== 'https:' || url.username || url.password) return undefined;
-      url.searchParams.set('fn', 'sqr_128');
+      url.searchParams.append('fn', 'sqr_128');
       const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) })
         .catch(async () => new Response(await ipcRenderer.invoke('account:avatar', url.href)));
       if (!response.ok || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) return undefined;
@@ -84,38 +115,73 @@ if (location.origin === 'https://web.max.ru') {
         avatar = canvas.toDataURL('image/png');
       } finally { bitmap.close(); }
       return avatar;
-    } catch { return undefined; }
+    } catch (error) { profileFailure('max-error', error.name, error.message); return undefined; }
+  }
+  async function ownRecords(db, storeName, id) {
+    const read = key => new Promise((resolve, reject) => {
+      const request = db.transaction(storeName, 'readonly').objectStore(storeName).get(key);
+      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    const store = db.transaction(storeName, 'readonly').objectStore(storeName);
+    if (!Array.isArray(store.keyPath) || store.keyPath[0] !== 'revision') return [await read(id)].filter(Boolean);
+    // MAX 26+ uses [schemaRevision, id]. Discover only revision prefixes by
+    // skipping whole key ranges, then request the exact owner key per revision.
+    // No other contact values are loaded and no contact list is traversed.
+    const revisions = await new Promise((resolve, reject) => {
+      const values = [], request = store.openKeyCursor();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor || values.length >= 16) { resolve(values); return; }
+        if (!Array.isArray(cursor.key) || typeof cursor.key[0] !== 'string') { resolve(values); return; }
+        const revision = cursor.key[0]; values.push(revision);
+        try { cursor.continue([revision, []]); } catch (error) { reject(error); }
+      };
+    });
+    return (await Promise.all(revisions.map(revision => read([revision, id])))).filter(Boolean)
+      .sort((a, b) => Number(b.model?._meta?.persistTime || 0) - Number(a.model?._meta?.persistTime || 0));
   }
   async function syncProfile() {
     if (readingProfile) return;
     readingProfile = true;
     try {
-      const databases = (await indexedDB.databases()).filter(db => /^max-db-\d+-\d+$/.test(db.name || ''));
+      const allDatabases = await indexedDB.databases();
+      const candidates = allDatabases.filter(db => /^max-db-\d+-\d+$/.test(db.name || ''));
+      const signedIn = candidates.filter(db => !db.name.endsWith('-0'));
+      const databases = signedIn.length ? signedIn : candidates;
       const identities = new Set(databases.map(db => db.name.split('-').at(-1)));
+      profileStatus('max-db', { count: databases.length, identityCount: identities.size, hasZeroIdentity: identities.has('0'), fields: [...new Set(allDatabases.map(db => (db.name || '').replace(/\d+/g, 'N')))] });
       if (identities.size !== 1) return;
-      const newest = databases.sort((a, b) => Number(b.name.split('-')[2]) - Number(a.name.split('-')[2]))[0];
-      if (!newest) return;
+      for (const newest of databases.sort((a, b) => Number(b.name.split('-')[2]) - Number(a.name.split('-')[2]))) {
       const db = await new Promise((resolve, reject) => {
         const request = indexedDB.open(newest.name);
         request.onupgradeneeded = () => { request.transaction.abort(); reject(new Error('Missing MAX database')); };
         request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
       });
       try {
-        if (!db.objectStoreNames.contains('viewer')) return;
-        const record = await new Promise((resolve, reject) => {
-          const request = db.transaction('viewer', 'readonly').objectStore('viewer').get('');
-          request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
-        });
-        const contact = record?.model?.contact;
+        if (!db.objectStoreNames.contains('viewer')) continue;
+        const record = (await ownRecords(db, 'viewer', '')).find(value => value?.model?.contact);
+        let contact = record?.model?.contact;
+        profileStatus('max-record', { recordFound: !!contact, hasSource: !!contact?.baseUrl, hasRawSource: !!contact?.baseRawUrl, fields: Object.keys(contact || {}) });
+        // MAX renders its viewer through the own contact record, which can be
+        // newer than the copy embedded in viewer (especially the photo URL).
+        const ownID = contact?.id?.toString();
+        if (/^\d+$/.test(ownID || '') && db.objectStoreNames.contains('contacts')) {
+          const saved = (await ownRecords(db, 'contacts', ownID)).find(value => value?.model?.id?.toString() === ownID);
+          if (saved?.model?.id?.toString() === ownID && Number(saved.model.updateTime || 0) >= Number(contact.updateTime || 0)) contact = { ...contact, ...saved.model };
+        }
         const names = contact?.names;
         const own = names?.find(name => name.type === 'ONEME') || names?.[0];
-        const name = [own?.firstName, own?.lastName].filter(value => typeof value === 'string' && value.trim()).join(' ').trim().slice(0, 40);
-        if (!name || /[\x00-\x1f\x7f]/.test(name)) return;
+        const name = ([own?.firstName, own?.lastName].filter(value => typeof value === 'string' && value.trim()).join(' ') || (typeof own?.name === 'string' ? own.name : '')).trim().slice(0, 40);
+        if (!name || /[\x00-\x1f\x7f]/.test(name)) continue;
         const image = await profileAvatar(typeof contact.baseUrl === 'string' ? contact.baseUrl : '');
+        profileStatus('max-source', { hasName: !!name, hasSource: !!contact.baseUrl, sourceType: typeof contact.baseUrl, imageLoaded: !!image });
         const profile = JSON.stringify({ name, avatar: image });
         if (profile !== lastProfile) { lastProfile = profile; ipcRenderer.send('account:profile', { name, avatar: image }); }
+        break;
       } finally { db.close(); }
-    } catch { /* MAX may change its schema; keep the saved account name. */ }
+      }
+    } catch (error) { profileFailure('max-error', error.name, error.message); }
     finally { readingProfile = false; }
   }
   void syncProfile(); setInterval(syncProfile, 5000);
@@ -236,6 +302,7 @@ if (location.origin === 'https://web.max.ru') {
 if (location.origin === 'https://web.telegram.org') {
   contextBridge.executeInMainWorld({ func: () => {
     let busy = false, lastProfile = '', avatarKey = '', avatar = '';
+    const roots = new Map();
     const bounded = async operation => {
       let timer;
       try { return await Promise.race([operation, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Profile timeout')), 6000); })]); }
@@ -245,50 +312,64 @@ if (location.origin === 'https://web.telegram.org') {
       const profile = JSON.stringify({ name, avatar: image });
       if (profile !== lastProfile) { lastProfile = profile; window.__maxwebProfile.send({ name, avatar: image }); }
     }
+    async function telegramRoot() {
+      if (window.rootScope?.myId) return window.rootScope;
+      // Cached Web K can execute a different module revision from the HTML's
+      // modulepreload hints. Reuse only resources this page actually loaded.
+      const sources = [...new Set(performance.getEntriesByType('resource').map(entry => entry.name))].filter(source => {
+        try { const url = new URL(source); return url.origin === location.origin && !url.search && !url.hash && /\/rootScope-[A-Za-z0-9_-]+\.js$/.test(url.pathname); } catch { return false; }
+      });
+      for (const source of sources.slice(-4)) {
+        if (!roots.has(source)) roots.set(source, bounded(import(source)).catch(() => undefined));
+        const loaded = await roots.get(source);
+        const root = loaded && Object.values(loaded).find(value => value && typeof value.getMyId === 'function' && /^[1-9]\d*$/.test(String(value.getMyId())));
+        if (root) return root;
+      }
+    }
     async function syncTelegramProfile() {
       if (busy) return;
       busy = true;
       try {
-        const root = window.rootScope;
+        const root = await telegramRoot();
+        const proxy = window.apiManagerProxy;
+        const accountNumber = proxy?.tabState?.accountNumber;
+        const useProxy = !root?.myId && typeof proxy?.invoke === 'function' && Number.isInteger(accountNumber) && accountNumber >= 0 && accountNumber <= 4;
+        const getSelf = useProxy ? () => proxy.invoke('manager', { name: 'appUsersManager', method: 'getSelf', args: [], accountNumber }) : () => root.managers.appUsersManager.getSelf();
+        const loadAvatar = useProxy ? (id, photo, size) => proxy.loadAvatar(id, photo, size, accountNumber) : (id, photo, size) => root.managers.appAvatarsManager.loadAvatar(id, photo, size);
         const managers = root?.managers;
-        if (!root?.myId || !managers?.appUsersManager) return;
+        window.__maxwebProfile.status('tg-root', { hasRoot: !!root, hasId: !!root?.myId, hasUserManager: !!managers?.appUsersManager, hasLoader: !!window.apiManagerProxy, hasGetters: useProxy, count: roots.size, fields: [...roots.keys()].map(source => new URL(source).pathname.split('/').pop().replace(/\.js$/, '')) });
+        if (!useProxy && !managers?.appUsersManager) return;
         // getSelf reads the signed-in user's record, not the contact list.
-        const user = await bounded(managers.appUsersManager.getSelf());
-        if (!user || String(user.id) !== String(root.myId)) return;
+        const user = await bounded(getSelf());
+        window.__maxwebProfile.status('tg-model', { fields: Object.keys(user || {}), hasId: !!user?.id, sourceType: typeof user?.id, hasName: !!(user?.first_name || user?.last_name), photoKind: user?.photo?._ || 'none' });
+        if (!user || !/^[1-9]\d*$/.test(String(user.id)) || !useProxy && root?.myId && String(user.id) !== String(root.myId)) return;
+        const peerID = (!useProxy && root?.myId) || (typeof user.id.toPeerId === 'function' ? user.id.toPeerId() : user.id);
+        const stillOwn = async () => (!useProxy || proxy.tabState.accountNumber === accountNumber) && String((await bounded(getSelf()))?.id) === String(user.id);
         const name = [user.first_name, user.last_name].filter(value => typeof value === 'string' && value.trim()).join(' ').trim().slice(0, 40);
         if (!name || /[\x00-\x1f\x7f]/.test(name)) return;
         const key = `${user.id}:${user.photo?.photo_id || ''}`;
+        window.__maxwebProfile.status('tg-source', { photoKind: user.photo?._ || 'none', hasLoader: useProxy || typeof managers?.appAvatarsManager?.loadAvatar === 'function' });
         if (key !== avatarKey) {
           publish(name, undefined);
           let nextAvatar = '';
           if (user.photo?._ === 'userProfilePhoto') {
-            const url = await bounded(managers.appAvatarsManager.loadAvatar(root.myId, user.photo, 'photo_small'));
-            // Web K returns a local object URL for the downloaded own avatar.
-            if (typeof url === 'string' && url.startsWith('blob:')) {
-              const response = await fetch(url);
-              const blob = await response.blob();
-              if (blob.size <= 2 * 1024 * 1024) {
-                const bitmap = await createImageBitmap(blob);
-                try {
-                  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
-                  const edge = Math.min(bitmap.width, bitmap.height);
-                  canvas.getContext('2d').drawImage(bitmap, (bitmap.width - edge) / 2, (bitmap.height - edge) / 2, edge, edge, 0, 0, 64, 64);
-                  nextAvatar = canvas.toDataURL('image/png');
-                } finally { bitmap.close(); }
-              }
-            }
+            let url;
+            try { url = await bounded(loadAvatar(peerID, user.photo, 'photo_small')); } catch {}
+            window.__maxwebProfile.status('tg-url', { sourceType: typeof url, hasSource: !!url, sourceProtocol: typeof url === 'string' && url.startsWith('blob:') ? 'blob' : 'other' });
+            if (!url) url = document.querySelector(`[data-peer-id="${user.id}"] img.avatar-photo`)?.src;
+            if (typeof url === 'string' && url.startsWith('blob:')) nextAvatar = await window.__maxwebProfile.localAvatar(url);
             // A missing URL or a temporary decode/download failure must be retried.
             if (!nextAvatar) return;
           }
-          if (String(root.myId) !== String(user.id)) return;
+          if (!await stillOwn()) return;
           avatar = nextAvatar;
           avatarKey = key;
         }
         // A Telegram account switch during an asynchronous photo load must not
         // attach the previous identity to the newly selected account.
-        if (String(root.myId) !== String(user.id)) return;
+        if (!await stillOwn()) return;
         publish(name, avatar);
-      } catch { /* Keep the last known profile if Telegram changes its internals. */ }
+      } catch (error) { window.__maxwebProfile.failure('tg-error', error.name, error.message); }
       finally { busy = false; }
     }
     void syncTelegramProfile(); setInterval(syncTelegramProfile, 5000);
@@ -297,11 +378,11 @@ if (location.origin === 'https://web.telegram.org') {
 
 if (location.origin === 'https://web.whatsapp.com') {
   contextBridge.executeInMainWorld({ func: () => {
-    let busy = false, lastProfile = '', imageKey = '', image = '', retryAt = 0;
+    let busy = false, lastProfile = '', imageKey = '', image = '', retryAt = 0, lookupRetryAt = 0, pictureOwner = '';
     const module = name => { try { return typeof window.require === 'function' ? window.require(name) : null; } catch { return null; } };
     const ownID = () => {
       const prefs = module('WAWebUserPrefsMeUser');
-      return prefs?.getMaybeMePnUser?.() || prefs?.getMaybeMeLidUser?.();
+      return prefs?.getMaybeMeUser?.() || prefs?.getMaybeMePnUser?.() || prefs?.getMaybeMeLidUser?.();
     };
     const identity = value => value?._serialized || value?.toString?.();
     function publish(name, avatar) {
@@ -313,6 +394,7 @@ if (location.origin === 'https://web.whatsapp.com') {
       const local = url.protocol === 'blob:' && url.origin === location.origin;
       const remote = url.protocol === 'https:' && !url.username && !url.password && /(^|\.)(whatsapp\.net|whatsapp\.com|fbcdn\.net)$/.test(url.hostname);
       if (!local && !remote) throw new Error('Unexpected avatar origin');
+      if (local) return window.__maxwebProfile.localAvatar(url.href);
       const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) })
         .catch(async error => { if (local) throw error; return new Response(await window.__maxwebProfile.readAvatar(url.href)); });
       if (!response.ok || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) throw new Error('Avatar unavailable');
@@ -341,22 +423,47 @@ if (location.origin === 'https://web.whatsapp.com') {
         // Do not enumerate contacts/messages or read credentials from storage.
         const me = ownID(); if (!me) return;
         const userID = identity(me);
+        if (pictureOwner !== userID) { lookupRetryAt = 0; pictureOwner = userID; }
         const name = (module('WAWebUserPrefsGeneral')?.getPushname?.() || module('WAWebConnModel')?.Conn?.pushname || '').trim().slice(0,40);
         if (!name || /[\x00-\x1f\x7f]/.test(name)) return;
         if (imageKey && !imageKey.startsWith(`${userID}:`)) { image = ''; imageKey = ''; retryAt = 0; }
         publish(name, image || undefined);
-        const store = module('WAWebProfilePicThumbCollection')?.ProfilePicThumb || module('WAWebCollections')?.ProfilePicThumb;
-        let ownPhoto = store?.get?.(me);
-        // find refreshes stale/incomplete cached thumbnails as well as missing ones.
-        if (store?.find) {
+        const pictures = module('WAWebProfilePicThumbCollection');
+        const store = pictures?.ProfilePicThumbCollection || pictures?.ProfilePicThumbCollectionImpl || pictures?.ProfilePicThumb || module('WAWebCollections')?.ProfilePicThumb;
+        window.__maxwebProfile.status('wa-store', { hasStore: !!store, hasLoader: typeof store?.find === 'function' });
+        const findPicture = async owner => {
+          if (!store?.find) return store?.get?.(owner);
           let timer;
-          try { ownPhoto = await Promise.race([store.find(me), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Own photo timeout')), 6000); })]); }
+          try { return await Promise.race([store.find(owner), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Own photo timeout')), 6000); })]); }
           finally { clearTimeout(timer); }
+        };
+        const getters = module('WAWebProfilePicThumbGetters');
+        const pictureSource = photo => {
+          if (!photo) return;
+          const field = key => { try { return photo[key] ?? photo.get?.(key) ?? photo[`__x_${key}`] ?? photo.mirror?.[key]; } catch { return undefined; } };
+          const getter = name => { try { return getters?.[name]?.(photo); } catch { return undefined; } };
+          const values = [getter('getImg'), field('img'), getter('getImgFull'), field('imgFull'), field('previewEurl'), field('eurl')];
+          return values.find(value => typeof value === 'string' && value) || (values.includes(null) ? null : undefined);
+        };
+        let ownPhoto = await findPicture(me), source = pictureSource(ownPhoto);
+        // WhatsApp can keep an empty thumbnail for the user's LID while its PN
+        // alias has the picture. Both IDs come exclusively from own user prefs.
+        const prefs = module('WAWebUserPrefsMeUser');
+        const owners = [prefs?.getMaybeMePnUser?.(), prefs?.getMaybeMeLidUser?.()].filter(Boolean);
+        const seen = new Set([userID]);
+        for (const owner of owners) {
+          if (typeof source === 'string' && source) break;
+          const id = identity(owner); if (seen.has(id)) continue; seen.add(id);
+          const candidate = await findPicture(owner), next = pictureSource(candidate);
+          if (typeof next === 'string' && next) { ownPhoto = candidate; source = next; }
+        }
+        if (source === undefined && ownPhoto?.markStale && Date.now() >= lookupRetryAt) {
+          lookupRetryAt = Date.now() + 60000;
+          ownPhoto.markStale(); ownPhoto = await findPicture(me); source = pictureSource(ownPhoto);
         }
         if (!ownPhoto) return;
-        const getters = module('WAWebProfilePicThumbGetters');
-        const sources = [getters?.getImg?.(ownPhoto), ownPhoto.img, getters?.getImgFull?.(ownPhoto), ownPhoto.imgFull];
-        const source = sources.find(value => typeof value === 'string' && value) || (sources.includes(null) ? null : undefined);
+        window.__maxwebProfile.status('wa-model', { fields: Object.keys(ownPhoto), photoKind: typeof ownPhoto.previewEurl });
+        window.__maxwebProfile.status('wa-source', { hasSource: !!source, sourceType: typeof source, hasGetters: !!getters, stale: !!ownPhoto.stale, sourceProtocol: typeof source === 'string' && source.startsWith('blob:') ? 'blob' : 'other' });
         if (typeof source === 'string' && source) {
           const key = `${userID}:${source}`;
           if (key !== imageKey && Date.now() >= retryAt) {
@@ -365,9 +472,9 @@ if (location.origin === 'https://web.whatsapp.com') {
             if (identity(ownID()) !== userID) return;
             image = next; imageKey = key; retryAt = 0;
           }
-        } else if (source === null && !ownPhoto.stale) { image = ''; imageKey = `${userID}:`; }
+        } else if (source === null && !ownPhoto.stale && !ownPhoto.eurlStale) { image = ''; imageKey = `${userID}:`; }
         if (identity(ownID()) === userID) publish(name, imageKey ? image : undefined);
-      } catch { /* Preserve the last known own profile if WhatsApp changes its internals. */ }
+      } catch (error) { window.__maxwebProfile.failure('wa-error', error.name, error.message); }
       finally { busy = false; }
     }
     void syncWhatsAppProfile(); setInterval(syncWhatsAppProfile, 5000);
@@ -376,22 +483,105 @@ if (location.origin === 'https://web.whatsapp.com') {
 
 if (location.origin === 'https://web.vk.me') {
   contextBridge.executeInMainWorld({ func: () => {
-    let busy = false, lastProfile = '', imageSource = '', image = '';
+    let busy = false, lastProfile = '', imageSource = '', image = '', lastOwner = '';
     function publish(name, avatar = imageSource ? image : undefined) { const profile=JSON.stringify({name,avatar});if(profile!==lastProfile){lastProfile=profile;window.__maxwebProfile.send({name,avatar});} }
     const selfLabels = ['Мой профиль', 'Моя страница', 'Мой аккаунт', 'My profile', 'Your profile', 'My account'];
+    const cleanName = value => typeof value === 'string' && !/[\x00-\x1f\x7f]/.test(value) ? value.trim().slice(0, 40) : '';
+    const ownID = () => {
+      const id = String(window.vkmeConfig?.vkid || window.vk?.id || '');
+      return /^[1-9]\d*$/.test(id) ? id : '';
+    };
+    function selfRecord(value, id, depth = 0) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+      let fallback;
+      if (id && String(value.id ?? value.user_id ?? '') === id) {
+        window.__maxwebProfile.status('vk-model', { fields: Object.keys(value).concat(value.photo && typeof value.photo === 'object' ? Object.keys(value.photo).map(key => `photo_${key}`) : []), photoKind: Array.isArray(value.photo) ? 'array' : typeof value.photo });
+        const name = cleanName([value.first_name || value.firstName, value.last_name || value.lastName].filter(Boolean).join(' ') || value.fullName || value.name);
+        if (name) {
+          const photo = value.photo;
+          const sizes = [photo?.photo100, photo?.photo200, photo?.photo50, photo?.url, photo?.src, photo?.small, photo?.medium, photo?.large, photo?.s, photo?.m, photo?.l, photo?.[100], photo?.[50], photo?.[200], ...(Array.isArray(photo?.sizes) ? photo.sizes.map(size => size?.url) : []), ...(Array.isArray(photo) ? photo.map(size => typeof size === 'string' ? size : size?.url) : [])];
+          fallback = { name, source: value.has_photo === false || value.has_photo === 0 ? '' :
+            [value.photo_100, value.photo_200, value.photo_50, value.photo100, value.photo200, value.photoUrl, value.avatarUrl, value.avatar, photo, ...sizes].find(url => typeof url === 'string' && url) };
+          if (fallback.source !== undefined) return fallback;
+        }
+      }
+      // Only named own-profile slots. Never walk collections, messages, auth
+      // fields, a Redux store or arbitrary application state.
+      if (depth < 2) for (const key of ['user', 'profile', 'viewer', 'self', 'currentUser', 'account', 'activeAccount', 'value', 'data']) {
+        const result = selfRecord(value[key], id, depth + 1);
+        if (result?.source !== undefined) return result;
+        fallback ||= result;
+      }
+      return fallback;
+    }
+    function reactSelf(control, id) {
+      if (!control || !id) return;
+      const keys = Object.keys(control);
+      const props = keys.find(key => key.startsWith('__reactProps$'));
+      const direct = props && selfRecord(control[props], id); if (direct?.source !== undefined) return direct;
+      let fallback = direct;
+      let fiber = control[keys.find(key => key.startsWith('__reactFiber$'))];
+      for (let n = 0; fiber && n < 24; n++, fiber = fiber.return) {
+        const result = selfRecord(fiber.memoizedProps, id);
+        if (result?.source !== undefined) return result;
+        fallback ||= result;
+        let hook = fiber.memoizedState;
+        for (let m = 0; hook && m < 24; m++, hook = hook.next) {
+          const result = selfRecord(hook.memoizedState, id);
+          if (result?.source !== undefined) return result;
+          fallback ||= result;
+        }
+      }
+      return fallback;
+    }
+    function ownProfile() {
+      const id = ownID();
+      const menuButton = document.querySelector('button[aria-label="Меню"], button[title="Меню"], [role="button"][aria-label="Меню"]');
+      let fallback;
+      if (id) {
+        const models = [selfRecord(window.vkmeConfig, id), selfRecord(window.vk, id), reactSelf(menuButton, id)];
+        const model = models.find(value => value?.source !== undefined) || models.find(Boolean);
+        if (model?.source !== undefined) return { ...model, id };
+        if (model) fallback = { ...model, id };
+      }
+      const own = selfLabels.map(label => document.querySelector(`button[aria-label="${label}"], a[aria-label="${label}"]`)).find(Boolean);
+      if (own) {
+        const photo = own.querySelector('img');
+        const name = cleanName(own.getAttribute('data-name') || photo?.alt);
+        if (name && !selfLabels.includes(name) && !/^(аватар|фото|profile|avatar)/i.test(name)) return { name, source: photo?.currentSrc || photo?.src, id, control: own };
+      }
+      // Current VK Me exposes the signed-in account as the first header in its
+      // own navigation menu, rather than a button labelled "Мой профиль".
+      // Reading this menu also works when the profile model isn't in the button's
+      // props yet. Do not open the menu or read names from the conversation area.
+      const menu = id && menuButton && document.querySelector('[role="menu"][aria-label="Меню"]');
+      if (menu) {
+        let container = menu;
+        for (let n = 0; container.children.length === 1 && n < 4; n++) container = container.firstElementChild;
+        const header = container.firstElementChild;
+        const model = reactSelf(header, id); if (model?.source !== undefined) return { ...model, id, control: header };
+        const text = header?.textContent?.trim();
+        const name = text && text.length <= 80 ? cleanName(text) : '';
+        if (name && !/^(меню|контакты|настройки|помощь|выйти|архив|важные сообщения)$/i.test(name)) {
+          const photo = header.querySelector('img');
+          return { name, source: photo?.currentSrc || photo?.src, id, control: header };
+        }
+      }
+      return fallback;
+    }
     async function syncVKProfile() {
       if (busy) return;
       busy = true;
       try {
-        // Read only an explicitly labelled own-profile control. Never infer the
-        // owner from a chat header, contact list, messages or session credentials.
-        const own = selfLabels.map(label => document.querySelector(`button[aria-label="${label}"], a[aria-label="${label}"]`)).find(Boolean);
+        const own = ownProfile();
+        window.__maxwebProfile.status('vk-source', { hasName: !!own?.name, hasSource: !!own?.source, sourceType: typeof own?.source });
         if (!own) return;
-        const photo = own.querySelector('img');
-        const name = (own.getAttribute('data-name') || photo?.alt || '').trim().slice(0,40);
-        if (!name || selfLabels.includes(name) || /^(аватар|фото|profile|avatar)/i.test(name) || /[\x00-\x1f\x7f]/.test(name)) return;
+        const { name, id } = own;
+        if (lastOwner && id && id !== lastOwner) { image = ''; imageSource = ''; publish(name, ''); }
+        lastOwner = id;
         publish(name);
-        const source = photo?.currentSrc || photo?.src || '';
+        const source = own.source;
+        if (source === undefined) return;
         if (source !== imageSource) {
           if (!source) { image = ''; imageSource = ''; }
           else {
@@ -399,6 +589,11 @@ if (location.origin === 'https://web.vk.me') {
             const local = url.protocol === 'blob:' && url.origin === location.origin;
             const remote = url.protocol === 'https:' && !url.username && !url.password && /(^|\.)(vk\.me|vk\.ru|vk\.com|userapi\.com|vkuserphoto\.ru|vkuserphoto\.com)$/.test(url.hostname);
             if (!local && !remote) return;
+            if (local) {
+              image = await window.__maxwebProfile.localAvatar(url.href); imageSource = source;
+              if (id && ownID() !== id || own.control && !own.control.isConnected) return;
+              publish(name, image); return;
+            }
             const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) })
               .catch(async error => { if (local) throw error; return new Response(await window.__maxwebProfile.readAvatar(url.href)); });
             if (!response.ok || Number(response.headers.get('content-length')) > 2*1024*1024) return;
@@ -415,9 +610,9 @@ if (location.origin === 'https://web.vk.me') {
           }
         }
         // The DOM may have changed while the avatar was loading.
-        if (!own.isConnected || (own.getAttribute('data-name') || own.querySelector('img')?.alt || '').trim().slice(0,40) !== name) return;
+        if (id && ownID() !== id || own.control && !own.control.isConnected) return;
         publish(name, image);
-      } catch { /* Keep the saved name/avatar when VK does not expose its own profile in the UI. */ }
+      } catch (error) { window.__maxwebProfile.failure('vk-error', error.name, error.message); }
       finally { busy=false; }
     }
     void syncVKProfile();setInterval(syncVKProfile,5000);

@@ -13,7 +13,7 @@
     <header><img src="../../assets/icon.png" alt="" width="64" height="64"><div><h1>Обла<span>ДЛЯ INTEL И APPLE SILICON</span></h1><p>MAX, Telegram, WhatsApp и VK. В одном окне.</p></div></header>
     <div class="section-label">ВНЕШНИЙ ВИД</div>
     <section class="card">
-      <label class="row theme-row" for="theme"><span><strong>Тема приложения</strong><small id="theme-hint">Боковая панель, настройки и экран блокировки</small></span><select id="theme"><option value="system">Как в macOS</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
+      <label class="row theme-row" for="theme"><span><strong>Тема приложения</strong><small id="theme-hint">Боковая панель, настройки и экран блокировки</small></span><span class="select-control"><select id="theme"><option value="system">Как в macOS</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></span></label>
       <div class="divider"></div>
       <div class="row zoom-row"><label for="max-zoom"><strong>Масштаб содержимого</strong><small id="max-zoom-hint">MAX, Telegram, WhatsApp и VK во всех аккаунтах · 50–200%</small></label><div class="zoom-controls"><div class="zoom-value"><input id="max-zoom" type="number" min="50" max="200" step="1" value="100" inputmode="numeric" aria-describedby="max-zoom-hint"><span aria-hidden="true">%</span></div><button id="max-zoom-reset" class="secondary" type="button" title="Вернуть масштаб содержимого к 100%">100%</button></div></div>
       <p class="hint zoom-feedback" id="max-zoom-feedback" role="status" aria-live="polite">⌘+ / ⌘− — изменить, ⌘0 — сбросить</p>
@@ -55,7 +55,7 @@
         <label>Повторите новый код<input id="confirm-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
         </div>
         <label class="row"><span><strong>Разблокировка с Touch ID</strong><small id="touch-id-hint">Код остаётся запасным способом</small></span><input type="checkbox" id="security-touch-id" role="switch"><span class="switch" aria-hidden="true"></span></label>
-        <label class="idle-label">Автоблокировка без действий в приложении<select id="idle-seconds"><option value="60">Через 1 минуту</option><option value="300">Через 5 минут</option><option value="900">Через 15 минут</option><option value="1800">Через 30 минут</option><option value="3600">Через 1 час</option><option value="0">Отключена</option></select></label>
+        <label class="idle-label">Автоблокировка без действий в приложении<span class="select-control"><select id="idle-seconds"><option value="60">Через 1 минуту</option><option value="300">Через 5 минут</option><option value="900">Через 15 минут</option><option value="1800">Через 30 минут</option><option value="3600">Через 1 час</option><option value="0">Отключена</option></select></span></label>
         <div class="security-actions"><button id="security-save" class="primary" type="submit">Включить блокировку</button><button id="security-disable" class="secondary" type="button" hidden>Выключить</button></div>
         <p id="security-feedback" role="status" aria-live="polite"></p>
       </form>

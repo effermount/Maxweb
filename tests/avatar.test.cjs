@@ -24,5 +24,5 @@ test('avatar fallback reads bounded bytes without cookies and rejects unsafe red
   }), /Unexpected avatar origin/);
   assert.equal(calls, 1);
   await assert.rejects(fetchAvatarBytes('https://cdn.max.ru/a', 'max', async () => new Response(new Uint8Array(2 * 1024 * 1024 + 1))), /too large/);
-  await assert.rejects(fetchAvatarBytes('https://cdn.max.ru/a', 'max', async () => new Response(null, { status: 403 })), /unavailable/);
+  await assert.rejects(fetchAvatarBytes('https://cdn.max.ru/a', 'max', async () => new Response(null, { status: 403 })), /HTTP 403/);
 });

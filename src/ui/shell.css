@@ -30,12 +30,13 @@ button:disabled { opacity: .45; cursor: default; }
 .active .name { color: var(--accent-text); }
 .rename { position: absolute; right: 0; top: 2px; width: 23px; height: 24px; border-radius: 5px; color: var(--muted); font-size: 13px; padding: 0; }
 .badge { border-radius: 12px; background: var(--accent); color: white; font-size: 9px; font-weight: 700; padding: 3px 5px; position: absolute; left: 31px; top: 5px; border: 2px solid var(--sidebar); }
-.add { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--accent-text); padding: 12px 9px; border-radius: 9px; text-align: left; }
-.add > span:first-child { font-size: 20px; line-height: 16px; }
+.add, .settings { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 10px 8px; border-radius: 9px; text-align: left; font-size: 11px; line-height: 16px; }
+.add { color: var(--accent-text); }
+.sidebar-action-icon { display: grid; place-items: center; flex: 0 0 20px; width: 20px; height: 20px; }
+.sidebar-action-icon svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .bottom { border-top: 1px solid var(--divider); margin-top: 12px; padding-top: 12px; }
-.settings { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; border-radius: 9px; padding: 10px 8px; color: var(--muted); font-size: 10px; }
+.settings { color: var(--muted); }
 .settings[aria-current="page"] { background: var(--selected); color: var(--accent-text); }
-.settings span:first-child { font-size: 17px; }
 footer { display: flex; justify-content: space-between; font-size: 8px; color: var(--muted); padding: 14px 8px 0; }
 #update-alert { width: 100%; padding: 10px 8px; color: var(--accent-text); background: var(--selected); border-radius: 8px; margin-bottom: 8px; font-size: 10px; text-align: left; }
 #update-alert span { float: right; }
@@ -57,8 +58,7 @@ form button.accent { background: var(--accent); color: white; }
 .collapsed .account { width: 100%; padding: 6px 4px; min-height: 56px; }
 .collapsed .avatar { width: 44px; height: 44px; border-radius: 13px; font-size: 16px; line-height: 1; }
 .collapsed .badge { left: auto; right: 0; top: 0; }
-.collapsed .add, .collapsed .settings { justify-content: center; padding: 12px 0; }
-.collapsed .settings span:first-child { font-size: 22px; }
+.collapsed .add, .collapsed .settings { justify-content: center; gap: 0; padding: 12px 0; }
 .collapsed nav { min-height: 52px; }
 .loading aside, .locked aside { display: none; }
 #profile-name { font-size: 10px; text-align: left; color: var(--accent-text); padding: 8px 0 0; overflow-wrap: anywhere; }

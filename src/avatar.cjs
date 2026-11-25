@@ -1,4 +1,5 @@
 'use strict';
+const { serviceInfo } = require('./services.cjs');
 
 const HOSTS = {
   max: ['max.ru', 'oneme.ru', 'okcdn.ru', 'mycdn.me'],
@@ -19,7 +20,8 @@ async function fetchAvatarBytes(source, service, fetchImpl = globalThis.fetch) {
   const signal = AbortSignal.timeout(8000);
   for (let redirects = 0; redirects <= 3; redirects++) {
     if (!avatarURL(source, service)) throw new Error('Unexpected avatar origin');
-    const response = await fetchImpl(source, { redirect: 'manual', credentials: 'omit', signal });
+    const response = await fetchImpl(source, { redirect: 'manual', credentials: 'omit', signal,
+      headers: { Accept: 'image/avif,image/webp,image/png,image/jpeg,*/*;q=0.5', Referer: serviceInfo(service).url } });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       await response.body?.cancel();
       const target = response.headers.get('location');
@@ -29,7 +31,7 @@ async function fetchAvatarBytes(source, service, fetchImpl = globalThis.fetch) {
     }
     if (!response.ok || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) {
       await response.body?.cancel();
-      throw new Error('Avatar unavailable');
+      throw new Error(response.ok ? 'Avatar too large' : `Avatar HTTP ${response.status}`);
     }
     const reader = response.body?.getReader();
     if (!reader) throw new Error('Empty avatar');

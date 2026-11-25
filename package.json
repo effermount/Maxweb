@@ -1,7 +1,7 @@
 {
   "name": "maxweb",
   "productName": "Обла",
-  "version": "1.2.14",
+  "version": "1.2.15",
   "description": "Обла — MAX, Telegram, WhatsApp и VK в одном приложении",
   "private": true,
   "main": "src/main.cjs",

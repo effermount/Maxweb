@@ -315,11 +315,14 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--focus); out
 #security-feedback { font-size: 11px; color: var(--muted); line-height: 1.5; margin: 12px 0 0; }
 #security-feedback.error { color: var(--error); }
 
-.theme-row select { min-width: 145px; flex-shrink: 0; }
+.select-control { position: relative; display: inline-grid; }
+.select-control::after { content: ""; position: absolute; right: 16px; top: 50%; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: translateY(-65%) rotate(45deg); pointer-events: none; }
+.select-control > select, #idle-seconds { appearance: none; -webkit-appearance: none; width: 100%; padding-right: 38px; }
+.theme-row .select-control { min-width: 145px; flex-shrink: 0; }
 select, #security-form input[type="password"], #idle-seconds { color: var(--text); }
-.theme-row select { font: inherit; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--field); }
+.theme-row select { font: inherit; border: 1px solid var(--border); border-radius: 8px; padding: 10px 38px 10px 12px; background: var(--field); }
 #theme-feedback.error { color: var(--error); }
-@media (max-width: 520px) { .theme-row { align-items: flex-start; flex-direction: column; } .theme-row select { width: 100%; } }
+@media (max-width: 520px) { .theme-row { align-items: flex-start; flex-direction: column; } .theme-row .select-control { width: 100%; } }
 
 .zoom-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .zoom-value { display: flex; align-items: center; gap: 4px; padding: 8px 10px; background: var(--field); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
