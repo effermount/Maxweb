@@ -1,6 +1,8 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+const { releaseNotes } = require('./release-notes.cjs');
 const { createHash } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { normalizeRepository, verifyManifest } = require('../src/update-core.cjs');
@@ -33,7 +35,13 @@ let release;
 try { release = JSON.parse(github(['api', `repos/${repo}/releases/tags/${tag}`])); }
 catch (error) { if (!String(error.stderr).includes('HTTP 404')) throw error; }
 if (release && !release.draft) throw new Error('Этот релиз уже опубликован и не будет изменён. Увеличьте версию.');
-if (!release) github(['release', 'create', tag, '--repo', repo, '--verify-tag', '--draft', '--title', `Maxweb ${version}`, '--notes-file', path.join(root, 'RELEASE_NOTES.md')]);
+const notesDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-release-'));
+try {
+  const notesFile = path.join(notesDirectory, 'notes.md');
+  fs.writeFileSync(notesFile, releaseNotes(fs.readFileSync(path.join(root, 'RELEASE_NOTES.md'), 'utf8'), version));
+  if (!release) github(['release', 'create', tag, '--repo', repo, '--verify-tag', '--draft', '--title', `Maxweb ${version}`, '--notes-file', notesFile]);
+  else github(['release', 'edit', tag, '--repo', repo, '--notes-file', notesFile]);
+} finally { fs.rmSync(notesDirectory, { recursive: true, force: true }); }
 // Upload into a draft: clients never observe a partially uploaded release.
 execFileSync(gh, ['release', 'upload', tag, ...assets, '--repo', repo, '--clobber'], { cwd: root, stdio: 'inherit' });
 github(['release', 'edit', tag, '--repo', repo, '--draft=false', '--latest']);

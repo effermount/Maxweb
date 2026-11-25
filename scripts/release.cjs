@@ -4,6 +4,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { sign, createHash } = require('node:crypto');
 const { canonicalManifest } = require('../src/update-core.cjs');
+const { releaseNotes } = require('./release-notes.cjs');
 const root = path.join(__dirname, '..');
 const { version } = require('../package.json');
 const dist = path.join(root, 'dist');
@@ -17,7 +18,7 @@ const manifest = {
   size: fs.statSync(archive).size,
   sha256: createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
   publishedAt: new Date().toISOString(),
-  notes: fs.readFileSync(path.join(root, 'RELEASE_NOTES.md'), 'utf8').slice(0, 12000)
+  notes: releaseNotes(fs.readFileSync(path.join(root, 'RELEASE_NOTES.md'), 'utf8'), version).slice(0, 12000)
 };
 manifest.signature = sign(null, canonicalManifest(manifest), fs.readFileSync(path.join(root, '.release/signing-private.pem'))).toString('base64');
 fs.writeFileSync(path.join(dist, 'latest.json'), JSON.stringify(manifest, null, 2) + '\n');
