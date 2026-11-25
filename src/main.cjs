@@ -18,7 +18,9 @@ const shellURL = uiURL('shell');
 const settingsURL = uiURL('settings');
 const offlineURL = uiURL('offline');
 const telegramOfflineURL = uiURL('offline-telegram');
-const isOfflineURL = url => url === offlineURL || url === telegramOfflineURL;
+const whatsappOfflineURL = uiURL('offline-whatsapp');
+const offlineFor = service => service === 'whatsapp' ? whatsappOfflineURL : service === 'telegram' ? telegramOfflineURL : offlineURL;
+const isOfflineURL = url => [offlineURL, telegramOfflineURL, whatsappOfflineURL].includes(url);
 
 app.setName('Maxweb');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -217,7 +219,8 @@ function secureNavigation(contents, id) {
   contents.on('will-attach-webview', event => event.preventDefault());
 }
 function configureSession(ses, service = 'max') {
-  ses.setUserAgent(ses.getUserAgent(), 'ru-RU,ru,en-US,en');
+  const userAgent = service === 'whatsapp' ? ses.getUserAgent().replace(/\s(?:Electron|Maxweb)\/[\w.-]+/g, '') : ses.getUserAgent();
+  ses.setUserAgent(userAgent, 'ru-RU,ru,en-US,en');
   const topURL = contents => contents && !contents.isDestroyed() ? contents.getURL() : '';
   ses.setPermissionCheckHandler((contents, permission, origin) => mayUsePermission(permission, origin, topURL(contents), preferences().notifications, service));
   ses.setPermissionRequestHandler(async (contents, permission, callback, details) => {
@@ -275,7 +278,7 @@ function createAccountView(account) {
   contents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
     if (!isMainFrame || code === -3 || !accountURL(url, account.id) || quitting) return;
     clearTimeout(runtime.retryTimer);
-    void contents.loadURL(account.service === 'telegram' ? telegramOfflineURL : offlineURL).then(() => {
+    void contents.loadURL(offlineFor(account.service)).then(() => {
       runtime.status = 'offline'; broadcast();
       runtime.retryTimer = setTimeout(() => loadMax(account.id), 15000);
     }).catch(() => {});
@@ -491,7 +494,7 @@ function createMenu() {
   const notificationTest = () => testNotification().catch(error => dialog.showMessageBox({ type: 'warning', message: 'Не удалось показать уведомление', detail: error.message }));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Maxweb', submenu: [
-      { label: 'О Maxweb', click: () => dialog.showMessageBox({ type: 'info', message: `Maxweb ${APP_VERSION}`, detail: 'Независимый клиент MAX и Telegram для Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
+      { label: 'О Maxweb', click: () => dialog.showMessageBox({ type: 'info', message: `Maxweb ${APP_VERSION}`, detail: 'Независимый клиент MAX, Telegram и WhatsApp для Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
       { label: 'Проверить обновления…', click: checkUpdates },
       { label: 'Заблокировать Maxweb', accelerator: 'CmdOrCtrl+L', click: () => security.lock() },
       { label: 'Настройки…', accelerator: 'CmdOrCtrl+,', click: showSettings },

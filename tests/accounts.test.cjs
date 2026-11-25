@@ -73,3 +73,18 @@ test('Telegram account types persist without changing existing MAX partitions', 
   assert.throws(() => accountPartition('default', 'telegram'));
   assert.equal(normalizeAccounts([{ ...telegram, service: 'unknown' }]).length, 0);
 });
+
+
+test('WhatsApp sessions persist in their own partition and cannot reuse the legacy MAX account', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-whatsapp-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const store = createStore(dir), whatsapp = newAccount(undefined, 'whatsapp');
+  store.set({ accounts: [...store.get().accounts, whatsapp], activeAccountId: whatsapp.id });
+  const restored = createStore(dir).get();
+  assert.equal(restored.accounts[1].service, 'whatsapp');
+  assert.equal(restored.activeAccountId, whatsapp.id);
+  assert.equal(accountPartition(whatsapp.id, 'whatsapp'), `persist:whatsapp-${whatsapp.id}`);
+  assert.notEqual(accountPartition(whatsapp.id, 'whatsapp'), accountPartition(whatsapp.id, 'telegram'));
+  assert.throws(() => accountPartition('default', 'whatsapp'));
+  assert.deepEqual(normalizeAccounts([{ id: 'default', name: 'Invalid', service: 'whatsapp' }]), []);
+});

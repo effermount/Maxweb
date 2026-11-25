@@ -42,3 +42,15 @@ test('Telegram origins and permissions stay within the selected messenger', () =
   assert.equal(mayUsePermission('media', 'https://web.max.ru', 'https://web.telegram.org/k/', true, 'telegram'), false);
   assert.equal(mayUsePermission('media', 'https://web.telegram.org', 'file:///settings.html', true, 'telegram'), false);
 });
+
+
+test('WhatsApp origin, requesting frames and permissions are isolated', () => {
+  const { isWhatsAppURL, isServiceURL } = require('../src/policy.cjs');
+  assert.ok(isWhatsAppURL('https://web.whatsapp.com/'));
+  for (const url of ['http://web.whatsapp.com/', 'https://web.whatsapp.com.evil.test/', 'https://web.whatsapp.com@evil.test/', 'https://evil@web.whatsapp.com/', 'https://web.whatsapp.com:444/', 'https://wa.me/123']) assert.equal(isWhatsAppURL(url), false);
+  assert.equal(isServiceURL('https://web.whatsapp.com/', 'telegram'), false);
+  assert.ok(mayUsePermission('media', 'https://web.whatsapp.com', 'https://web.whatsapp.com/', true, 'whatsapp'));
+  assert.equal(mayUsePermission('notifications', 'https://web.whatsapp.com', 'https://web.whatsapp.com/', false, 'whatsapp'), false);
+  assert.equal(mayUsePermission('media', 'https://web.telegram.org', 'https://web.whatsapp.com/', true, 'whatsapp'), false);
+  assert.equal(mayUsePermission('media', 'https://web.whatsapp.com', 'file:///settings.html', true, 'whatsapp'), false);
+});

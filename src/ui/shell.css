@@ -15,7 +15,8 @@ h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.5px; }
 .section-heading span:last-child { letter-spacing: 0; font-weight: 400; }
 nav { overflow-y: auto; min-height: 90px; flex: 1; padding-bottom: 12px; }
 .account-row { display: flex; align-items: center; position: relative; border-radius: 11px; margin-bottom: 5px; }
-.account-row.active { background: var(--selected); }
+.account-row.active { background: transparent; }
+.account-row.active::before { content: ""; position: absolute; left: 0; top: 50%; width: 2px; height: 14px; transform: translateY(-50%); border-radius: 2px; background: var(--accent); pointer-events: none; }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; border: 0; background: none; color: inherit; }
 button:hover { background: var(--hover); }
@@ -23,7 +24,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); out
 button:disabled { opacity: .45; cursor: default; }
 .account { display: flex; align-items: center; gap: 10px; width: calc(100% - 48px); min-height: 65px; border-radius: 11px; text-align: left; padding: 10px 7px; }
 .avatar { width: 34px; height: 34px; flex-shrink: 0; border-radius: 11px; background: var(--avatar); color: var(--avatar-text); display: grid; place-items: center; font-size: 14px; font-weight: 650; }
-.active .avatar { color: white; background: var(--accent); }
+.active .avatar { outline: 1.5px solid var(--accent); outline-offset: 1px; }
 .account-label { min-width: 0; flex: 1; }
 .name { font-size: 12px; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-status { display: block; font-size: 9px; color: var(--muted); margin-top: 5px; }
@@ -56,8 +57,9 @@ form button.accent { background: var(--accent); color: white; }
 .collapsed .collapse-chevron { transform: rotate(180deg); }
 .collapsed .brand, .collapsed .section-heading, .collapsed .account-label, .collapsed .rename,
 .collapsed .background-note, .collapsed footer, .collapsed .settings span:nth-child(2), .collapsed .add-label, .collapsed #update-alert { display: none; }
-.collapsed .account { width: 100%; padding: 9px; min-height: 52px; }
-.collapsed .badge { left: 25px; top: 0; }
+.collapsed .account { width: 100%; padding: 6px 4px; min-height: 56px; }
+.collapsed .avatar { width: 44px; height: 44px; border-radius: 13px; font-size: 16px; line-height: 1; }
+.collapsed .badge { left: auto; right: 0; top: 0; }
 .collapsed .add, .collapsed .settings { justify-content: center; padding: 12px 0; }
 .collapsed .settings span:first-child { font-size: 22px; }
 .collapsed nav { min-height: 52px; }
@@ -90,16 +92,15 @@ form button.accent { background: var(--accent); color: white; }
 .avatar.tone-2 { background: var(--avatar-green); color: var(--avatar-green-text); }
 .avatar.tone-3 { background: var(--avatar-orange); color: var(--avatar-orange-text); }
 .avatar.tone-4 { background: var(--avatar-pink); color: var(--avatar-pink-text); }
-.active .avatar { color: white; background: var(--accent); }
 
 .account-mute { width: 24px; height: 30px; flex-shrink: 0; display: grid; place-items: center; padding: 4px; border-radius: 6px; color: var(--muted); }
 .account-mute svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .account-mute .mute-slash { display: none; }
 .account-mute.is-muted { color: var(--accent-text); }
 .account-mute.is-muted .mute-slash { display: block; }
-.collapsed .account-mute { position: absolute; left: 0; bottom: 0; width: 22px; height: 22px; padding: 2px; border: 2px solid var(--sidebar); background: var(--sidebar); border-radius: 7px; }
-.collapsed .account-mute svg { width: 14px; height: 14px; }
-.collapsed .account-mute:hover { background: var(--hover); }
+.collapsed .account-mute { position: absolute; left: 4px; bottom: 6px; width: 16px; height: 16px; padding: 2px; border: 0; background: rgb(0 0 0 / 28%); color: white; border-radius: 0 5px 0 13px; z-index: 2; }
+.collapsed .account-mute svg { width: 12px; height: 12px; }
+.collapsed .account-mute:hover { background: rgb(0 0 0 / 48%); }
 
 .avatar { position: relative; overflow: hidden; }
 .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -125,4 +126,7 @@ form button.accent { background: var(--accent); color: white; }
 .service-mark { flex-shrink: 0; width: 14px; height: 14px; display: grid; place-items: center; border-radius: 4px; color: white; background: #353d8b; font-size: 9px; z-index: 1; }
 .service-mark svg { width: 11px; fill: currentColor; }
 
-.collapsed .service-mark { position: absolute; right: 0; bottom: 1px; }
+.collapsed .service-mark { position: absolute; right: 4px; bottom: 6px; width: 16px; height: 16px; font-size: 10px; border-radius: 5px 0 13px 0; }
+.collapsed .service-mark svg { width: 12px; }
+
+.whatsapp-icon, .service-mark.whatsapp { background: #168b58; }

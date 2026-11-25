@@ -10,6 +10,7 @@ function isServiceURL(value, service = 'max') {
 }
 const isMaxURL = value => isServiceURL(value, 'max');
 const isTelegramURL = value => isServiceURL(value, 'telegram');
+const isWhatsAppURL = value => isServiceURL(value, 'whatsapp');
 
 function isExternalURL(value) {
   try {
@@ -30,4 +31,4 @@ function unreadBadge(title) {
   return Number(match[1]) > 99 ? '99+' : String(Number(match[1]));
 }
 
-module.exports = { MAX_URL, isMaxURL, isTelegramURL, isServiceURL, isExternalURL, mayUsePermission, unreadBadge };
+module.exports = { MAX_URL, isMaxURL, isTelegramURL, isWhatsAppURL, isServiceURL, isExternalURL, mayUsePermission, unreadBadge };

@@ -38,7 +38,7 @@ function normalizeAccounts(value) {
 }
 function accountPartition(id, service = 'max') {
   serviceInfo(service);
-  if (service === 'telegram' && id === 'default') throw new Error('Неизвестный аккаунт.');
+  if (service !== 'max' && id === 'default') throw new Error('Неизвестный аккаунт.');
   if (!validAccountId(id)) throw new Error('Неизвестный аккаунт.');
   return id === 'default' ? 'persist:max' : `persist:${service}-${id}`;
 }

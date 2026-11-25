@@ -9,7 +9,7 @@ function maybeAutoTouchID() {
 }
 window.addEventListener('focus', maybeAutoTouchID);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') autoTouchAttempted = false; else maybeAutoTouchID(); });
-const serviceName = account => account?.service === 'telegram' ? 'Telegram' : 'MAX';
+const serviceName = account => ({ max: 'MAX', telegram: 'Telegram', whatsapp: 'WhatsApp' })[account?.service || 'max'];
 const error = message => { $('error').textContent = message; };
 const action = async operation => { try { error(''); return await operation(); } catch (e) { error(e.message); } };
 function edit(account = null) {
@@ -54,15 +54,17 @@ function render(next) {
     button.setAttribute('aria-label', account.name);
     button.title = `${account.name}${index < 9 ? ` · ⌘${index + 1}` : ''} · Правый клик — настройки`;
     if (account.active) button.setAttribute('aria-current', 'page');
-    const avatar = document.createElement('span'); avatar.className = `avatar tone-${index % 5}`; avatar.textContent = account.name.trim().split(/\s+/).slice(0, 2).map(part => [...part][0]).join('').toLocaleUpperCase('ru'); avatar.setAttribute('aria-hidden', 'true');
+    const avatar = document.createElement('span'); avatar.className = `avatar tone-${index % 5}`; avatar.setAttribute('aria-hidden', 'true');
+    const initials = document.createElement('span'); initials.className = 'avatar-initials'; initials.textContent = account.name.trim().split(/\s+/).slice(0, 2).map(part => [...part][0]).join('').toLocaleUpperCase('ru'); avatar.append(initials);
     if (account.avatar) {
       const image = document.createElement('img'); image.src = account.avatar; image.alt = '';
       image.addEventListener('error', () => image.remove(), { once: true });
       avatar.append(image);
     }
-    const serviceMark = document.createElement('span'); serviceMark.className = `service-mark ${account.service === 'telegram' ? 'telegram' : 'max'}`;
+    const serviceMark = document.createElement('span'); serviceMark.className = `service-mark ${account.service || 'max'}`;
     serviceMark.title = serviceName(account); serviceMark.setAttribute('aria-hidden', 'true');
     if (account.service === 'telegram') serviceMark.innerHTML = '<svg viewBox="0 0 24 24"><path d="m3 11 17-7-4 16-5-5 5-6-7 5-6-3Z"/></svg>';
+    else if (account.service === 'whatsapp') serviceMark.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-11.8 7L4 20l1.4-4.2A8 8 0 1 1 20 11.5Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7c0 5 4 8 8 8l1-2-3-1-1 1-3-3 1-1-1-3Z"/></svg>';
     else serviceMark.textContent = 'M';
     const label = document.createElement('span'); label.className = 'account-label';
     const name = document.createElement('span'); name.className = 'name'; name.textContent = account.name;

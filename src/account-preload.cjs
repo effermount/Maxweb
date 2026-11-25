@@ -1,6 +1,6 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
-if (['https://web.max.ru', 'https://web.telegram.org'].includes(location.origin)) {
+if (['https://web.max.ru', 'https://web.telegram.org', 'https://web.whatsapp.com'].includes(location.origin)) {
   contextBridge.exposeInMainWorld('__maxwebNotifications', {
     send: request => ipcRenderer.send('account:notification', request),
     onEvent: callback => ipcRenderer.on('account:notification-event', (_event, value) => callback(value))
@@ -286,5 +286,85 @@ if (location.origin === 'https://web.telegram.org') {
       finally { busy = false; }
     }
     void syncTelegramProfile(); setInterval(syncTelegramProfile, 5000);
+  } });
+}
+
+if (location.origin === 'https://web.whatsapp.com') {
+  contextBridge.exposeInMainWorld('__maxwebProfile', {
+    send: profile => ipcRenderer.send('account:profile', profile)
+  });
+  contextBridge.executeInMainWorld({ func: () => {
+    let busy = false, lastProfile = '', imageKey = '', image = '', retryAt = 0;
+    const module = name => { try { return typeof window.require === 'function' ? window.require(name) : null; } catch { return null; } };
+    const ownID = () => {
+      const prefs = module('WAWebUserPrefsMeUser');
+      return prefs?.getMaybeMePnUser?.() || prefs?.getMaybeMeLidUser?.();
+    };
+    const identity = value => value?._serialized || value?.toString?.();
+    function publish(name, avatar) {
+      const profile = JSON.stringify({ name, avatar });
+      if (profile !== lastProfile) { lastProfile = profile; window.__maxwebProfile.send({ name, avatar }); }
+    }
+    async function thumbnail(source) {
+      const url = new URL(source);
+      const local = url.protocol === 'blob:' && url.origin === location.origin;
+      const remote = url.protocol === 'https:' && !url.username && !url.password && /(^|\.)(whatsapp\.net|whatsapp\.com|fbcdn\.net)$/.test(url.hostname);
+      if (!local && !remote) throw new Error('Unexpected avatar origin');
+      const response = await fetch(url.href, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
+      if (!response.ok || Number(response.headers.get('content-length')) > 2 * 1024 * 1024) throw new Error('Avatar unavailable');
+      const reader = response.body.getReader(); const chunks = []; let size = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read(); if (done) break;
+          size += value.length;
+          if (size > 2 * 1024 * 1024) { await reader.cancel(); throw new Error('Avatar too large'); }
+          chunks.push(value);
+        }
+      } finally { reader.releaseLock(); }
+      const bitmap = await createImageBitmap(new Blob(chunks));
+      try {
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+        const edge = Math.min(bitmap.width, bitmap.height);
+        canvas.getContext('2d').drawImage(bitmap, (bitmap.width-edge)/2, (bitmap.height-edge)/2, edge, edge, 0, 0, 64, 64);
+        return canvas.toDataURL('image/png');
+      } finally { bitmap.close(); }
+    }
+    async function syncWhatsAppProfile() {
+      if (busy) return;
+      busy = true;
+      try {
+        // Only the current user's identity, display name and own picture are read.
+        // Do not enumerate contacts/messages or read credentials from storage.
+        const me = ownID(); if (!me) return;
+        const userID = identity(me);
+        const name = (module('WAWebUserPrefsGeneral')?.getPushname?.() || module('WAWebConnModel')?.Conn?.pushname || '').trim().slice(0,40);
+        if (!name || /[\x00-\x1f\x7f]/.test(name)) return;
+        if (imageKey && !imageKey.startsWith(`${userID}:`)) { image = ''; imageKey = ''; retryAt = 0; }
+        publish(name, image);
+        const store = module('WAWebProfilePicThumbCollection')?.ProfilePicThumb || module('WAWebCollections')?.ProfilePicThumb;
+        let ownPhoto = store?.get?.(me);
+        if (!ownPhoto && store?.find) {
+          let timer;
+          try { ownPhoto = await Promise.race([store.find(me), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Own photo timeout')), 6000); })]); }
+          finally { clearTimeout(timer); }
+        }
+        if (!ownPhoto) return;
+        const getters = module('WAWebProfilePicThumbGetters');
+        const sources = [getters?.getImg?.(ownPhoto), ownPhoto.img, getters?.getImgFull?.(ownPhoto), ownPhoto.imgFull];
+        const source = sources.find(value => typeof value === 'string' && value) || (sources.includes(null) ? null : undefined);
+        if (typeof source === 'string' && source) {
+          const key = `${userID}:${source}`;
+          if (key !== imageKey && Date.now() >= retryAt) {
+            retryAt = Date.now() + 60000;
+            const next = await thumbnail(source);
+            if (identity(ownID()) !== userID) return;
+            image = next; imageKey = key; retryAt = 0;
+          }
+        } else if (source === null && !ownPhoto.stale) { image = ''; imageKey = `${userID}:`; }
+        if (identity(ownID()) === userID) publish(name, image);
+      } catch { /* Preserve the last known own profile if WhatsApp changes its internals. */ }
+      finally { busy = false; }
+    }
+    void syncWhatsAppProfile(); setInterval(syncWhatsAppProfile, 5000);
   } });
 }
