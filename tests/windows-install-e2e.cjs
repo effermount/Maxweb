@@ -41,14 +41,17 @@ if (process.versions.electron) {
   assert.equal(require('node:crypto').createHash('sha256').update(bytes).digest('hex'), manifest.sha256);
   const profile = path.join(process.env.APPDATA, 'Обла');
   assert(!fs.existsSync(profile), 'Refuse to touch an existing user profile');
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'obla-native-update-')));
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'obla-native-update-')));
   const target = path.join(root, 'Обла with spaces'); fs.mkdirSync(target);
   const executable = path.join(target, 'Obla.exe');
   function stopFixture() {
     const escaped = executable.replaceAll("'", "''");
     const script = `Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq '${escaped}' } | ForEach-Object { $_.ProcessId }`;
     const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' });
-    for (const pid of (result.stdout || '').trim().split(/\s+/).filter(value => /^\d+$/.test(value))) spawnSync('taskkill.exe', ['/PID', pid, '/T', '/F'], { stdio: 'ignore' });
+    assert.equal(result.status, 0, 'Cannot enumerate fixture processes');
+    const pids = (result.stdout || '').trim().split(/\s+/).filter(value => /^\d+$/.test(value));
+    for (const pid of pids) spawnSync('taskkill.exe', ['/PID', pid, '/T', '/F'], { stdio: 'ignore' });
+    return pids.length;
   }
   async function main() {
     const first = spawnSync(installer, ['/S', `/D=${target}`], { stdio: 'inherit', timeout: 120000, windowsVerbatimArguments: true, argv0: `"${installer}"` });
@@ -68,7 +71,8 @@ if (process.versions.electron) {
     const state = require('../src/store.cjs').createStore(profile).get();
     assert.equal(state.accounts[0].name, 'Update fixture'); assert.equal(state.theme, 'dark'); assert.equal(state.maxZoom, 125);
     assert.equal(fs.readFileSync(path.join(profile, 'keep-fixture'), 'utf8'), 'retained');
-    stopFixture();
+    assert(stopFixture() > 0, 'Installed app must still be running after confirming the update');
+    await new Promise(resolve => setTimeout(resolve, 1500));
     const verified = spawnSync(require('electron'), [__filename, 'verify', profile, target, source], { stdio: 'inherit', timeout: 45000 });
     assert.equal(verified.status, 0, 'Cookie verification failed');
     console.log('PASS: real Windows NSIS install/update, Unicode/spaces, app relaunch, retained profile/settings and encrypted cookie');
