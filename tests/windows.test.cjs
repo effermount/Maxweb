@@ -32,7 +32,7 @@ async function fixture(t, bytes = installer(), failSpawn = false) {
     spawnInstaller: (file, args, config) => {
       spawned++; assert.equal(flushed, 1);
       assert.equal(file, path.join(directory, 'Obla-1.2.16-windows-x64.exe'));
-      assert.deepEqual(args, ['--updated', '/S', '--force-run', `/D=${target}`]);
+      assert.deepEqual(args, ['--updated', '/S', '--force-run', `/D=${fs.realpathSync(target)}`]);
       assert.equal(config.shell, false); assert.equal(config.detached, true); assert.equal(config.windowsVerbatimArguments, true);
       assert.equal(config.argv0, `"${file}"`);
       const child = new EventEmitter(); child.unref = () => { unref = true; };
