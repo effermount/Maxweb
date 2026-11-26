@@ -41,14 +41,18 @@ function matchesMacBinary(architectures, releaseArch, arch = process.arch) {
   return supportsMacArchitecture(releaseArch, arch) && slices.has(arch === 'x64' ? 'x86_64' : 'arm64') &&
     (releaseArch !== 'universal' || slices.has('arm64') && slices.has('x86_64'));
 }
-function verifyManifest(manifest, publicKey, baseURL, { allowFile = false, arch = process.arch, requireCompatible = true } = {}) {
-  if (!manifest || manifest.schema !== 1 || !VERSION.test(manifest.version) || manifest.platform !== 'darwin' || !['arm64', 'x64', 'universal'].includes(manifest.arch) || requireCompatible && !supportsMacArchitecture(manifest.arch, arch)) throw new Error('Этот выпуск не предназначен для архитектуры этого Mac.');
+function verifyManifest(manifest, publicKey, baseURL, { allowFile = false, arch = process.arch, platform = 'darwin', requireCompatible = true } = {}) {
+  const validArchitecture = platform === 'darwin'
+    ? ['arm64', 'x64', 'universal'].includes(manifest?.arch) && (!requireCompatible || supportsMacArchitecture(manifest.arch, arch))
+    : platform === 'win32' && ['x64', 'arm64'].includes(manifest?.arch) && (!requireCompatible || manifest.arch === arch);
+  if (!manifest || manifest.schema !== 1 || !VERSION.test(manifest.version) || manifest.platform !== platform || !validArchitecture) throw new Error(platform === 'win32' ? 'Этот выпуск не предназначен для архитектуры этой Windows.' : 'Этот выпуск не предназначен для архитектуры этого Mac.');
   if (!Number.isSafeInteger(manifest.size) || manifest.size < 1 || manifest.size > MAX_ARCHIVE || !/^[a-f0-9]{64}$/.test(manifest.sha256)) throw new Error('Некорректная контрольная сумма или размер обновления.');
   if (typeof manifest.notes !== 'string' || manifest.notes.length > 12000 || typeof manifest.publishedAt !== 'string' || !Number.isFinite(Date.parse(manifest.publishedAt)) || typeof manifest.signature !== 'string' || !/^[A-Za-z0-9+/]{86}==$/.test(manifest.signature)) throw new Error('Некорректное описание обновления.');
   if (!verify(null, canonicalManifest(manifest), publicKey, Buffer.from(manifest.signature, 'base64'))) throw new Error('Подпись обновления не совпадает. Установка отменена.');
   if (typeof manifest.url !== 'string' || manifest.url.length > 2048) throw new Error('Некорректный адрес обновления.');
   const url = new URL(manifest.url, baseURL);
   const base = new URL(baseURL);
+  if (platform === 'win32' && !url.pathname.toLowerCase().endsWith('.exe')) throw new Error('Обновление Windows должно содержать установщик EXE.');
   if (url.username || url.password || url.hash || !(url.protocol === 'https:' || allowFile && base.protocol === 'file:' && url.protocol === 'file:' && path.dirname(fileURLToPath(url)) === path.dirname(fileURLToPath(base)))) throw new Error('Обновления разрешены только по HTTPS или из выбранной локальной папки.');
   return { ...payload(manifest), signature: manifest.signature, downloadURL: url.href };
 }
@@ -70,7 +74,7 @@ async function fetchResource(fetchImpl, url, timeout) {
       const message = timedOut
         ? 'Сервер обновлений не ответил вовремя. Повторите проверку позже.'
         : /CERT|TLS|SSL|SELF_SIGNED|UNABLE_TO_VERIFY/.test(code)
-          ? 'Не удалось проверить защищённое соединение с сервером обновлений. Проверьте дату и время на Mac и настройки сети.'
+          ? 'Не удалось проверить защищённое соединение с сервером обновлений. Проверьте дату и время на компьютере и настройки сети.'
           : 'Не удалось подключиться к серверу обновлений. Проверьте интернет-соединение и настройки VPN или прокси, затем повторите попытку.';
       throw new Error(message, { cause: error });
     }
@@ -105,14 +109,16 @@ async function readJSON(url, options) {
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
-async function githubRelease(repository, options) {
+async function githubRelease(repository, options = {}) {
   const repo = normalizeRepository(repository);
   const release = await readJSON(`https://api.github.com/repos/${repo}/releases/latest`, options);
   if (release.draft || release.prerelease) throw new Error('Стабильный выпуск ещё не опубликован.');
   // Existing ARM64 clients use latest.json; new clients prefer an explicitly
   // Universal manifest, falling back when checking releases made before it existed.
-  const asset = release.assets?.find(item => item.name === 'latest-mac.json') || release.assets?.find(item => item.name === 'latest.json');
-  if (!asset?.browser_download_url?.startsWith(`https://github.com/${repo}/releases/download/`)) throw new Error('В релизе отсутствует подписанный файл latest.json.');
+  const asset = options.platform === 'win32'
+    ? release.assets?.find(item => item.name === 'latest-windows.json')
+    : release.assets?.find(item => item.name === 'latest-mac.json') || release.assets?.find(item => item.name === 'latest.json');
+  if (!asset?.browser_download_url?.startsWith(`https://github.com/${repo}/releases/download/`)) throw new Error(`В релизе отсутствует подписанный файл ${options.platform === 'win32' ? 'latest-windows.json' : 'latest.json'}.`);
   return { manifest: await readJSON(asset.browser_download_url, options), manifestURL: asset.browser_download_url };
 }
 async function downloadVerified(manifest, destination, options = {}) {

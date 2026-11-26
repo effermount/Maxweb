@@ -1,5 +1,8 @@
 'use strict';
 const $ = id => document.getElementById(id);
+const windows = window.oblaPlatform?.isWindows === true;
+const osName = windows ? 'Windows' : 'macOS';
+const modifier = windows ? 'Ctrl+' : '⌘';
 let packaged = false, banner, security, selectedTheme = 'system', selectedMaxZoom = 100;
 function status(message, error = false) {
   $('status').textContent = message;
@@ -16,8 +19,9 @@ async function init() {
     $('login').checked = state.openAtLogin;
     $('login').disabled = !state.packaged;
     if (!state.packaged) $('login-hint').textContent = 'Доступно после установки приложения';
-    $('version').textContent = `Обла ${state.version} · ${state.arch === 'arm64' ? 'Apple Silicon' : state.arch === 'x64' ? 'Intel' : state.arch}`;
+    $('version').textContent = `Обла ${state.version} · ${windows ? `Windows ${state.arch}` : state.arch === 'arm64' ? 'Apple Silicon' : state.arch === 'x64' ? 'Intel' : state.arch}`;
     $('repository').value = state.updates.repository;
+    $('auto-update').checked = state.updates?.autoCheck !== false;
     $('auto-update').checked = state.updates.autoCheck;
     renderUpdate(state.update);
   } catch (error) { status(error.message, true); }
@@ -41,7 +45,7 @@ $('test').addEventListener('click', async () => {
   status('Отправляем пробное уведомление…');
   try {
     const result = await window.maxweb.test();
-    status(result.delivered ? 'macOS приняла уведомление. Если баннер не виден, проверьте «Фокусирование» и настройки macOS.' : 'Баннер не подтверждён. Разрешите уведомления для приложения «Обла» в настройках macOS.');
+    status(result.delivered ? `${osName} приняла уведомление. Если баннер не виден, проверьте режим «Не беспокоить» и настройки уведомлений.` : `Баннер не подтверждён. Разрешите уведомления для приложения «Обла» в настройках ${osName}.`);
   } catch (error) { status(error.message, true); }
   finally { $('test').disabled = false; }
 });
@@ -99,7 +103,7 @@ for (const [key, id] of Object.entries(bannerIDs)) $(id).addEventListener('chang
 });
 function renderSecurity(value) {
   security = value;
-  $('security-state').textContent = value.enabled ? 'Защита включена · ⌘L для блокировки' : 'Блокировка выключена';
+  $('security-state').textContent = value.enabled ? `Защита включена · ${modifier}L для блокировки` : 'Блокировка выключена';
   $('lock-now').hidden = !value.enabled;
   $('current-pin-label').hidden = true;
   $('change-code').hidden = !value.enabled;
@@ -109,6 +113,7 @@ function renderSecurity(value) {
   $('security-disable').hidden = !value.enabled;
   $('security-touch-id').checked = value.touchIDAvailable && (value.enabled ? value.touchID : true);
   $('security-touch-id').disabled = !value.touchIDAvailable;
+  $('security-touch-id').closest('label').hidden = windows;
   $('touch-id-hint').textContent = value.touchIDAvailable ? 'Код остаётся запасным способом' : 'Touch ID не настроен или недоступен на этом Mac';
   $('idle-seconds').value = String(value.idleSeconds);
   for (const id of ['current-pin', 'new-pin', 'confirm-pin']) $(id).value = '';
@@ -154,7 +159,7 @@ window.maxweb.onLock(() => { for (const id of ['current-pin', 'new-pin', 'confir
 function renderTheme(state) {
   selectedTheme = state.source;
   $('theme').value = state.source;
-  $('theme-hint').textContent = state.source === 'system' ? `Как в macOS · сейчас ${state.dark ? 'тёмная' : 'светлая'}` : 'Выбрана вручную';
+  $('theme-hint').textContent = state.source === 'system' ? `Как в ${osName} · сейчас ${state.dark ? 'тёмная' : 'светлая'}` : 'Выбрана вручную';
 }
 $('theme').addEventListener('change', async () => {
   const previous = selectedTheme;
@@ -169,7 +174,7 @@ function renderMaxZoom(percent) {
   selectedMaxZoom = percent;
   $('max-zoom').value = String(percent);
   $('max-zoom-reset').disabled = percent === 100;
-  $('max-zoom-feedback').textContent = `Масштаб содержимого: ${percent}%. ⌘+ / ⌘− — изменить, ⌘0 — сбросить.`;
+  $('max-zoom-feedback').textContent = `Масштаб содержимого: ${percent}%. ${modifier}+ / ${modifier}− — изменить, ${modifier}0 — сбросить.`;
   $('max-zoom-feedback').classList.remove('error');
 }
 async function saveMaxZoom(percent) {

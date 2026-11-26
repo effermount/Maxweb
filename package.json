@@ -1,7 +1,7 @@
 {
   "name": "maxweb",
   "productName": "Обла",
-  "version": "1.2.15",
+  "version": "1.2.17",
   "description": "Обла — MAX, Telegram, WhatsApp и VK в одном приложении",
   "private": true,
   "main": "src/main.cjs",
@@ -29,7 +29,12 @@
     "test:telegram": "electron tests/telegram-runtime.cjs",
     "test:scroll": "electron tests/scroll-runtime.cjs",
     "test:account-lifecycle": "electron tests/account-lifecycle-runtime.cjs",
-    "test:lock-screen": "electron tests/lock-screen-runtime.cjs"
+    "test:lock-screen": "electron tests/lock-screen-runtime.cjs",
+    "predist:win": "node scripts/prepare-build.cjs --windows && node scripts/windows-icon.cjs",
+    "dist:win": "electron-builder --config electron-builder.windows.cjs --win --x64",
+    "prebuild:win": "node scripts/prepare-build.cjs --windows && node scripts/windows-icon.cjs",
+    "build:win": "electron-builder --config electron-builder.windows.cjs --win dir --x64",
+    "postdist:win": "node scripts/release-windows.cjs"
   },
   "devDependencies": {
     "electron": "45.4.1",
@@ -75,7 +80,8 @@
         "NSCameraUsageDescription": "Камера используется для видеозвонков в мессенджерах после вашего разрешения.",
         "NSMicrophoneUsageDescription": "Микрофон используется для звонков и голосовых сообщений после вашего разрешения.",
         "NSUserNotificationAlertStyle": "alert",
-        "LSHasLocalizedDisplayName": true
+        "LSHasLocalizedDisplayName": true,
+        "CFBundleName": "Обла"
       },
       "extraResources": [
         {
@@ -109,6 +115,7 @@
           "path": "/Applications"
         }
       ]
-    }
+    },
+    "afterPack": "scripts/after-pack.cjs"
   }
 }

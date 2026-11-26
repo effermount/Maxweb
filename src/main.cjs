@@ -10,8 +10,10 @@ const { createStore } = require('./store.cjs');
 const { newAccount, accountName, accountPartition, accountAvatar, reorderAccounts } = require('./accounts.cjs');
 const { normalizeRepository } = require('./update-core.cjs');
 const { AppSecurity } = require('./security.cjs');
+const { createTouchIDPrompt } = require('./touch-id.cjs');
 const { normalizeBanner, bannerContent } = require('./notifications.cjs');
 const { Updater } = require('./updater.cjs');
+const { WindowsUpdater } = require('./windows-updater.cjs');
 const APP_VERSION = require('../package.json').version;
 const SIDEBAR = 220;
 const uiURL = name => pathToFileURL(path.join(__dirname, `ui/${name}.html`)).href;
@@ -25,6 +27,7 @@ const offlineFor = service => service === 'vk' ? vkOfflineURL : service === 'wha
 const isOfflineURL = url => [offlineURL, telegramOfflineURL, whatsappOfflineURL, vkOfflineURL].includes(url);
 
 require('./brand.cjs').configureBrand(app);
+if (process.platform === 'win32') app.setAppUserModelId('local.maxweb.desktop');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('lang', 'ru');
@@ -172,7 +175,7 @@ async function logoutAccount(id) {
   try {
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'question', message: `Выйти из «${account.name}»?`,
-      detail: `Сессия ${serviceInfo(account.service).name} на этом Mac будет удалена, а аккаунт исчезнет из боковой панели. Для повторного входа потребуется авторизация. Другие аккаунты останутся на месте.`,
+      detail: `Сессия ${serviceInfo(account.service).name} на этом компьютере будет удалена, а аккаунт исчезнет из боковой панели. Для повторного входа потребуется авторизация. Другие аккаунты останутся на месте.`,
       buttons: ['Отмена', 'Выйти'], defaultId: 0, cancelId: 0, noLink: true
     });
     security.requireUnlocked();
@@ -253,7 +256,7 @@ function configureSession(ses, service = 'max') {
       try {
         for (const type of details.mediaTypes || []) {
           if (!['audio', 'video'].includes(type)) return callback(false);
-          if (!await systemPreferences.askForMediaAccess(type === 'audio' ? 'microphone' : 'camera')) return callback(false);
+          if (process.platform === 'darwin' && !await systemPreferences.askForMediaAccess(type === 'audio' ? 'microphone' : 'camera')) return callback(false);
         }
       } catch { return callback(false); }
     }
@@ -379,7 +382,7 @@ function testNotification() {
     notification.on('show', () => { if (!settled) { settled = true; clearTimeout(timeout); resolve({ delivered: true }); } });
     notification.on('failed', (_event, message) => {
       activeNotifications.delete(notification);
-      if (!settled) { settled = true; clearTimeout(timeout); reject(new Error(message || 'macOS не разрешила уведомление.')); }
+      if (!settled) { settled = true; clearTimeout(timeout); reject(new Error(message || 'Система не разрешила уведомление.')); }
     });
     notification.on('click', () => { if (preferences().accounts.some(a => a.id === account.id)) selectAccount(account.id); else showSettings(); });
     notification.on('close', () => activeNotifications.delete(notification));
@@ -503,7 +506,7 @@ function bindIPC() {
     broadcast(); return shellState();
   });
   handle('shell:settings', 'shell', () => { showSettings(); });
-  handle('settings:get', 'settings', () => ({ theme: themeState(), maxZoom: preferences().maxZoom, notifications: preferences().notifications, banner: preferences().banner, security: security.snapshot(), openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
+  handle('settings:get', 'settings', () => ({ platform: process.platform, theme: themeState(), maxZoom: preferences().maxZoom, notifications: preferences().notifications, banner: preferences().banner, security: security.snapshot(), openAtLogin: app.getLoginItemSettings().openAtLogin, packaged: app.isPackaged, version: APP_VERSION, arch: process.arch, updates: preferences().updates, update: updater.snapshot() }));
   handle('settings:max-zoom', 'settings', setMaxZoom);
   handle('settings:theme', 'settings', source => {
     if (!['system', 'light', 'dark'].includes(source)) throw new Error('Выберите системную, светлую или тёмную тему.');
@@ -530,7 +533,7 @@ function bindIPC() {
     return app.getLoginItemSettings().openAtLogin;
   });
   handle('settings:test', 'settings', testNotification);
-  handle('settings:system', 'settings', () => shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension'));
+  handle('settings:system', 'settings', () => shell.openExternal(process.platform === 'win32' ? 'ms-settings:notifications' : 'x-apple.systempreferences:com.apple.Notifications-Settings.extension'));
   handle('settings:open', 'settings', () => {
     if (activeId()) return selectAccount(activeId());
     activePane = 'account'; layout(); broadcast(); mainWindow.setTitle('Обла'); mainWindow.webContents.focus();
@@ -553,13 +556,12 @@ function createMenu() {
   const notificationTest = () => testNotification().catch(error => dialog.showMessageBox({ type: 'warning', message: 'Не удалось показать уведомление', detail: error.message }));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Обла', submenu: [
-      { label: 'Об «Обла»', click: () => dialog.showMessageBox({ type: 'info', message: `Обла ${APP_VERSION}`, detail: 'Независимый клиент MAX, Telegram, WhatsApp и VK для Intel и Apple Silicon.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ⌘Q.' }) },
+      { label: 'Об «Обла»', click: () => dialog.showMessageBox({ type: 'info', message: `Обла ${APP_VERSION}`, detail: `Независимый клиент MAX, Telegram, WhatsApp и VK.\nАккаунты сохраняют отдельные авторизации и работают в фоне.\nПолный выход — ${process.platform === 'darwin' ? '⌘Q' : 'Ctrl+Q'}.` }) },
       { label: 'Проверить обновления…', click: checkUpdates },
       { label: 'Экран блокировки', accelerator: 'CmdOrCtrl+L', click: () => security.lock() },
       { label: 'Настройки…', accelerator: 'CmdOrCtrl+,', click: showSettings },
-      { type: 'separator' }, { role: 'services', label: 'Службы' },
-      { type: 'separator' }, { role: 'hide', label: 'Скрыть «Обла»' }, { role: 'hideOthers', label: 'Скрыть остальные' }, { role: 'unhide', label: 'Показать все' },
-      { type: 'separator' }, { role: 'quit', label: 'Завершить «Обла»' }
+      ...(process.platform === 'darwin' ? [{ type: 'separator' }, { role: 'services', label: 'Службы' }, { type: 'separator' }, { role: 'hide', label: 'Скрыть «Обла»' }, { role: 'hideOthers', label: 'Скрыть остальные' }, { role: 'unhide', label: 'Показать все' }] : []),
+      { type: 'separator' }, { role: 'quit', label: 'Завершить «Обла»', accelerator: 'CmdOrCtrl+Q' }
     ] },
     { label: 'Правка', submenu: [{ role: 'undo', label: 'Отменить' }, { role: 'redo', label: 'Повторить' }, { type: 'separator' }, { role: 'cut', label: 'Вырезать' }, { role: 'copy', label: 'Копировать' }, { role: 'paste', label: 'Вставить' }, { role: 'selectAll', label: 'Выбрать всё' }] },
     { label: 'Аккаунты', submenu: [
@@ -580,8 +582,9 @@ function createMenu() {
     { label: 'Окно', submenu: [{ role: 'minimize', label: 'Свернуть' }, { role: 'zoom', label: 'Масштабировать' }, { role: 'close', label: 'Закрыть окно' }] },
     { label: 'Помощь', submenu: [{ label: 'Проверить уведомления', click: notificationTest }, { label: 'Справка MAX', click: () => external('https://help.max.ru/') }] }
   ]));
-  const image = nativeImage.createFromPath(path.join(__dirname, '../assets/trayTemplate.png')); image.setTemplateImage(true);
-  tray = new Tray(image); tray.setToolTip('Обла — все аккаунты работают в фоне');
+  const image = nativeImage.createFromPath(path.join(__dirname, process.platform === 'darwin' ? '../assets/trayTemplate.png' : '../assets/icon.png'));
+  if (process.platform === 'darwin') image.setTemplateImage(true);
+  tray = new Tray(process.platform === 'darwin' ? image : image.resize({ width: 16, height: 16 })); tray.setToolTip('Обла — все аккаунты работают в фоне');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Открыть «Обла»', click: showWindow }, { label: 'Настройки и обновления…', click: showSettings },
     { type: 'separator' }, { label: 'Завершить Обла', click: () => app.quit() }
@@ -613,18 +616,24 @@ const ready = hasLock ? app.whenReady().then(async () => {
   security = new AppSecurity({
     store,
     encrypt: async value => {
-      if (!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('Связка ключей macOS недоступна. Повторите позже.');
+      if (!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('Системное хранилище ключей недоступно. Повторите позже.');
       return (await safeStorage.encryptStringAsync(value)).toString('base64');
     },
     decrypt: async value => (await safeStorage.decryptStringAsync(Buffer.from(value, 'base64'))).result,
     canTouchID: () => process.platform === 'darwin' && systemPreferences.canPromptTouchID(),
-    promptTouchID: () => systemPreferences.promptTouchID('открыть приложение «Обла»'),
+    promptTouchID: createTouchIDPrompt({
+      packaged: process.platform === 'darwin' && app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      fallback: () => systemPreferences.promptTouchID('открыть приложение «Обла»')
+    }),
     onChange: securityChanged
   });
   // Node's HTTP stack has no Chromium cookie jar. Its Fetch implementation also
   // exposes manual redirects; Electron's net.fetch cancels them instead.
   let notifiedVersion;
-  updater = new Updater({
+  const PlatformUpdater = process.platform === 'win32' ? WindowsUpdater : Updater;
+  updater = new PlatformUpdater({
+    openExternal: url => shell.openExternal(url),
     version: APP_VERSION, directory: path.join(app.getPath('userData'), 'Updates'),
     publicKey: fs.readFileSync(path.join(__dirname, '../assets/release-public.pem')),
     getSettings: () => preferences().updates, packaged: app.isPackaged,

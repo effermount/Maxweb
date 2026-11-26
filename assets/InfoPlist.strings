@@ -1,4 +1,4 @@
-/* Finder localizes the name only if the raw CFBundleDisplayName matches the
-   filename (Maxweb). Keep that raw name and CFBundleName stable for updates
-   and Keychain, and use this localized display name for users. */
+/* System-facing names use Обла. The legacy Maxweb.app filename and executable
+   stay unchanged for update and Keychain compatibility. */
 CFBundleDisplayName = "Обла";
+CFBundleName = "Обла";

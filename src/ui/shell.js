@@ -1,5 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
+const modifier = window.oblaPlatform?.modifier || '⌘';
 let state, editing = null, editingAccount = null;
 let suppressAccountClickUntil = 0, pointerDrag = null, dragFrame = 0;
 let autoTouchAttempted = false, unlocking = false;
@@ -55,7 +56,7 @@ function render(next) {
     const row = document.createElement('div'); row.className = `account-row${account.active ? ' active' : ''}`; row.dataset.accountId = account.id;
     const button = document.createElement('button'); button.type = 'button'; button.className = 'account';
     button.setAttribute('aria-label', account.name);
-    button.title = `${account.name}${index < 9 ? ` · ⌘${index + 1}` : ''} · Перетащите для перемещения · Правый клик — настройки`;
+    button.title = `${account.name}${index < 9 ? ` · ${modifier}${index + 1}` : ''} · Перетащите для перемещения · Правый клик — настройки`;
     button.draggable = false; button.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
     if (account.active) button.setAttribute('aria-current', 'page');
     const avatar = document.createElement('span'); avatar.className = `avatar tone-${[...account.id].reduce((sum, char) => (sum * 31 + char.codePointAt(0)) >>> 0, 0) % 5}`; avatar.setAttribute('aria-hidden', 'true');

@@ -21,6 +21,13 @@ if (manifest.arch !== 'universal' || legacy.arch !== 'arm64' || ['version', 'url
 if (manifest.version !== version) throw new Error('Версия выпуска не совпадает с package.json.');
 const archive = fs.readFileSync(assets[1]);
 if (archive.length !== manifest.size || createHash('sha256').update(archive).digest('hex') !== manifest.sha256) throw new Error('Архив не совпадает с подписанным описанием выпуска. Выполните npm run dist заново.');
+const windows = path.join(root, 'dist/windows');
+const windowsManifest = JSON.parse(fs.readFileSync(path.join(windows, 'latest-windows.json')));
+verifyManifest(windowsManifest, publicKey, `https://github.com/${repo}/releases/download/${tag}/latest-windows.json`, { platform: 'win32', arch: 'x64' });
+const installer = path.join(windows, `Obla-${version}-windows-x64.exe`);
+const windowsBytes = fs.readFileSync(installer);
+if (windowsManifest.version !== version || windowsManifest.url !== path.basename(installer) || windowsManifest.size !== windowsBytes.length || windowsManifest.sha256 !== createHash('sha256').update(windowsBytes).digest('hex')) throw new Error('Установщик Windows не совпадает с подписанным описанием выпуска.');
+assets.push(installer, path.join(windows, `Obla-${version}-windows-x64.zip`), path.join(windows, 'latest-windows.json'));
 const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 if (git(['status', '--porcelain'])) throw new Error('Перед публикацией сохраните изменения в Git-коммите.');
 const remote = git(['remote', 'get-url', 'origin']).replace(/^git@github\.com:/, 'https://github.com/').replace(/\.git$/, '');
@@ -48,5 +55,10 @@ try {
 } finally { fs.rmSync(notesDirectory, { recursive: true, force: true }); }
 // Upload into a draft: clients never observe a partially uploaded release.
 execFileSync(gh, ['release', 'upload', tag, ...assets, '--repo', repo, '--clobber'], { cwd: root, stdio: 'inherit' });
+if (process.argv.includes('--staged')) {
+  github(['release', 'edit', tag, '--repo', repo, '--draft=false', '--prerelease', '--latest=false']);
+  console.log(`Staged https://github.com/${repo}/releases/tag/${tag} for native Windows verification`);
+  process.exit(0);
+}
 github(['release', 'edit', tag, '--repo', repo, '--draft=false', '--latest']);
 console.log(`Published https://github.com/${repo}/releases/tag/${tag}`);

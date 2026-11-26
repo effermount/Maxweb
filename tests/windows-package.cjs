@@ -1,0 +1,32 @@
+'use strict';
+const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const asar = require('@electron/asar'), resedit = require('resedit');
+const root = path.resolve(__dirname, '..'), { version } = require('../package.json');
+const output = path.join(root, 'dist/windows'), app = path.join(output, 'win-unpacked');
+const executable = fs.readFileSync(path.join(app, 'Obla.exe'));
+assert.equal(executable.toString('ascii', 0, 2), 'MZ');
+assert.equal(executable.readUInt16LE(executable.readUInt32LE(0x3c) + 4), 0x8664, 'Application must be Windows x64');
+const resources = resedit.NtExecutableResource.from(resedit.NtExecutable.from(executable));
+const information = resedit.Resource.VersionInfo.fromEntries(resources.entries)[0];
+const strings = information.getStringValues(information.getAvailableLanguages()[0]);
+assert.equal(strings.ProductName, 'Обла'); assert.equal(strings.FileDescription, 'Обла');
+assert.equal(strings.FileVersion, version);
+assert(resedit.Resource.IconGroupEntry.fromEntries(resources.entries).length > 0, 'Application icon must be embedded');
+const archive = path.join(app, 'resources/app.asar');
+for (const file of ['src/main.cjs', 'src/brand.cjs', 'src/update-core.cjs', 'src/updater.cjs', 'src/windows-updater.cjs', 'src/settings-preload.cjs', 'src/shell-preload.cjs', 'src/ui/platform.js', 'src/ui/settings.js', 'src/ui/settings.html', 'src/ui/shell.js', 'src/ui/shell.html']) {
+  assert(asar.extractFile(archive, file).equals(fs.readFileSync(path.join(root, file))), `Stale packaged source: ${file}`);
+}
+assert.equal(JSON.parse(asar.extractFile(archive, 'package.json')).version, version);
+assert(!fs.existsSync(path.join(app, 'Contents')), 'Mac native components must not be shipped');
+const installer = path.join(output, `Obla-${version}-windows-x64.exe`);
+assert.equal(fs.readFileSync(installer).toString('ascii', 0, 2), 'MZ');
+const manifest = JSON.parse(fs.readFileSync(path.join(output, 'latest-windows.json')));
+require('../src/update-core.cjs').verifyManifest(manifest, fs.readFileSync(path.join(root, 'assets/release-public.pem')), `https://github.com/effermount/Maxweb/releases/download/v${version}/latest-windows.json`, { platform: 'win32', arch: 'x64' });
+assert.equal(manifest.sha256, require('node:crypto').createHash('sha256').update(fs.readFileSync(installer)).digest('hex'));
+assert.equal(manifest.size, fs.statSync(installer).size);
+assert.equal(manifest.version, version);
+const zip = path.join(output, `Obla-${version}-windows-x64.zip`);
+const entries = execFileSync('/usr/bin/unzip', ['-Z1', zip], { encoding: 'utf8' }).trim().split('\n');
+assert(entries.includes('Obla.exe') && entries.includes('resources/app.asar'));
+console.log(`PASS: Windows x64 executable, Обла metadata/icon, final app sources, NSIS installer and portable ZIP (${version})`);

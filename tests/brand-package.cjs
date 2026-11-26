@@ -8,18 +8,23 @@ const root = path.resolve(__dirname, '..'), { version } = require('../package.js
 const app = path.join(root, 'dist/mac-universal/Maxweb.app'), contents = path.join(app, 'Contents');
 const plist = key => execFileSync('/usr/libexec/PlistBuddy', ['-c', `Print ${key}`, path.join(contents, 'Info.plist')], { encoding: 'utf8' }).trim();
 assert.equal(plist('CFBundleIdentifier'), 'local.maxweb.desktop');
-assert.equal(plist('CFBundleName'), 'Maxweb', 'Keychain identity must remain stable');
-assert.equal(plist('CFBundleExecutable'), 'Maxweb', 'Old update installers must still find the executable');
+assert.equal(plist('CFBundleName'), 'Обла', 'System menus must use the current bundle name');
+assert.equal(plist('CFBundleExecutable'), 'Maxweb', 'Preserve the executable path for Keychain and old installers');
+for (const suffix of ['', ' (Renderer)', ' (GPU)', ' (Plugin)']) {
+  const helper = `Обла Helper${suffix}`;
+  assert(fs.existsSync(path.join(contents, 'Frameworks', `${helper}.app`, 'Contents/MacOS', helper)), `Electron must find ${helper}`);
+}
 assert.equal(plist('CFBundleShortVersionString'), version);
 const display = execFileSync('/usr/bin/swift', ['-e', 'import Foundation; print(FileManager.default.displayName(atPath:CommandLine.arguments[1]))', app], { encoding: 'utf8' }).trim();
-assert.equal(display, 'Обла', 'Finder must display the new name');
+assert.equal(display, 'Обла', 'Finder must display the current brand');
+assert.equal(plist('CFBundleDisplayName'), 'Maxweb', 'Preserve native Keychain compatibility');
 for (const name of ['MacOS/Maxweb', 'Frameworks/Electron Framework.framework/Versions/A/Electron Framework']) {
   const slices = execFileSync('/usr/bin/lipo', ['-archs', path.join(contents, name)], { encoding: 'utf8' });
   assert(slices.includes('arm64') && slices.includes('x86_64'));
 }
 execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]);
 const bundle = path.join(contents, 'Resources/app.asar');
-for (const file of ['src/brand.cjs', 'src/ui/shell.html', 'src/ui/settings.html', 'src/main.cjs', 'assets/icon.png', 'assets/trayTemplate.png']) {
+for (const file of ['src/brand.cjs', 'src/ui/shell.html', 'src/ui/settings.html', 'src/main.cjs', 'src/update-core.cjs', 'src/updater.cjs', 'src/windows-updater.cjs', 'src/touch-id.cjs', 'assets/icon.png', 'assets/trayTemplate.png']) {
   assert(asar.extractFile(bundle, file).equals(fs.readFileSync(path.join(root, file))), `${file} must match the final source`);
 }
 for (const language of ['ru', 'en']) assert.match(fs.readFileSync(path.join(contents, `Resources/${language}.lproj/InfoPlist.strings`), 'utf8'), /CFBundleDisplayName = "Обла"/);
@@ -35,5 +40,5 @@ const bytes = fs.readFileSync(path.join(root, 'dist', modern.url)), hash = creat
 for (const manifest of [modern, legacy]) { assert.equal(manifest.version, version); assert.equal(manifest.sha256, hash); assert.equal(manifest.size, bytes.length); }
 const dmg = path.join(root, 'dist', `Obla-${version}-universal.dmg`);
 assert(fs.statSync(dmg).size > 0);
-console.log(`PASS: Обла ${version}, Finder name, original identity, new icon, Universal slices, code signature and compatible signed update archives`);
+console.log(`PASS: Обла ${version}, system display name, legacy filename and storage identity, Universal slices, code signature and compatible signed update archives`);
 console.log(`DMG: ${(fs.statSync(dmg).size / 1e6).toFixed(1)} MB`);

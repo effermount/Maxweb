@@ -7,8 +7,8 @@ const { compareVersions, normalizeRepository, verifyManifest, githubRelease, rea
 const run = promisify(execFile);
 
 class Updater {
-  constructor({ version, directory, publicKey, getSettings, onChange, fetchImpl, packaged = false, executable = process.execPath, bundleId = 'local.maxweb.desktop', beforeInstall = async () => {}, quit = () => {}, arch = process.arch }) {
-    Object.assign(this, { version, directory, publicKey, getSettings, onChange, fetchImpl, packaged, executable, bundleId, beforeInstall, quit, arch });
+  constructor({ version, directory, publicKey, getSettings, onChange, fetchImpl, packaged = false, executable = process.execPath, bundleId = 'local.maxweb.desktop', beforeInstall = async () => {}, quit = () => {}, arch = process.arch, platform = 'darwin' }) {
+    Object.assign(this, { version, directory, publicKey, getSettings, onChange, fetchImpl, packaged, executable, bundleId, beforeInstall, quit, arch, platform });
     this.state = { status: 'idle', currentVersion: version, progress: 0, message: 'Проверьте наличие новой версии.' };
     this.candidate = null;
     this.archive = null;
@@ -29,18 +29,18 @@ class Updater {
     this.busy = true;
     this.set({ status: 'checking', message: 'Проверяем GitHub Releases…', progress: 0 });
     try {
-      const options = { fetchImpl: this.fetchImpl };
+      const options = { fetchImpl: this.fetchImpl, platform: this.platform };
       const release = sourceOverride
         ? { manifest: await readJSON(sourceOverride, { ...options, allowFile: true }), manifestURL: sourceOverride }
         : await githubRelease(normalizeRepository(settings.repository), options);
       // Authenticate even old releases for another Mac architecture. They are
       // harmless when already older; only a compatible newer one can be offered.
-      const manifest = verifyManifest(release.manifest, this.publicKey, release.manifestURL, { allowFile: !!sourceOverride, requireCompatible: false });
+      const manifest = verifyManifest(release.manifest, this.publicKey, release.manifestURL, { allowFile: !!sourceOverride, platform: this.platform, requireCompatible: false });
       if (compareVersions(manifest.version, this.version) <= 0) {
         this.candidate = null;
         return this.set({ status: 'current', version: null, notes: '', message: `Установлена актуальная версия ${this.version}.`, checkedAt: new Date().toISOString() });
       }
-      if (!supportsMacArchitecture(manifest.arch, this.arch)) throw new Error('Этот выпуск не предназначен для архитектуры этого Mac.');
+      if (this.platform === 'win32' ? manifest.arch !== this.arch : !supportsMacArchitecture(manifest.arch, this.arch)) throw new Error('Этот выпуск не предназначен для архитектуры этого компьютера.');
       this.candidate = manifest;
       return this.set({ status: 'available', version: manifest.version, notes: manifest.notes, message: `Доступна версия ${manifest.version}.`, checkedAt: new Date().toISOString() });
     } catch (error) {
@@ -54,7 +54,8 @@ class Updater {
     this.busy = true;
     this.set({ status: 'downloading', progress: 0, message: `Загружаем «Обла» ${this.candidate.version}…` });
     try {
-      this.archive = await downloadVerified(this.candidate, path.join(this.directory, `Maxweb-${this.candidate.version}.zip`), {
+      const filename = this.platform === 'win32' ? `Obla-${this.candidate.version}-windows-${this.arch}.exe` : `Maxweb-${this.candidate.version}.zip`;
+      this.archive = await downloadVerified(this.candidate, path.join(this.directory, filename), {
         fetchImpl: this.fetchImpl, allowFile: this.candidate.downloadURL.startsWith('file:'),
         onProgress: progress => { if (progress !== this.state.progress) this.set({ progress }); }
       });

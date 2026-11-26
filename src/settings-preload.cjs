@@ -1,6 +1,7 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('maxweb', {
+  platform: process.platform,
   maxZoom: value => ipcRenderer.invoke('settings:max-zoom', value),
   onMaxZoom: callback => {
     const listener = (_event, percent) => callback(percent);

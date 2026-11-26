@@ -6,7 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Настройки Обла</title>
   <link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="style.css">
-  <script src="settings.js" defer></script>
+  <script src="platform.js" defer></script>
+<script src="settings.js" defer></script>
 </head>
 <body>
   <main>
@@ -29,7 +30,7 @@
       <div class="update-source"><label for="repository">Публичный репозиторий GitHub</label><div><input id="repository" placeholder="owner/Maxweb" spellcheck="false" autocomplete="off"><button id="update-save" class="secondary">Сохранить</button></div></div>
       <label class="row"><span><strong>Проверять автоматически</strong><small>При запуске и каждые 6 часов</small></span><input type="checkbox" id="auto-update" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
     </section>
-    <p class="hint">Файлы проверяются по цифровой подписи и SHA-256. Установка выполняется после нажатия кнопки, с перезапуском и сохранением аккаунтов.</p>
+    <p class="hint" id="update-hint">Подлинность обновления проверяется по подписанному описанию и SHA-256. Установка выполняется после нажатия кнопки, с перезапуском и сохранением аккаунтов.</p>
     <div class="section-label">УВЕДОМЛЕНИЯ</div>
     <section class="card">
       <label class="row"><span><strong>Сообщения из MAX, Telegram, WhatsApp и VK</strong><small>Разрешить системные уведомления</small></span><input type="checkbox" id="notifications" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
