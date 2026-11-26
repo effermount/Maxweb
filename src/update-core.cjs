@@ -16,12 +16,12 @@ function normalizeRepository(value) {
   let repo = String(value || '').trim();
   if (repo.startsWith('https://github.com/')) {
     const url = new URL(repo);
-    if (url.search || url.hash || url.username || url.password) throw new Error('Укажите GitHub-репозиторий в формате owner/Maxweb.');
+    if (url.search || url.hash || url.username || url.password) throw new Error('Укажите GitHub-репозиторий в формате owner/Obla.');
     repo = url.pathname.replace(/^\//, '').replace(/\/$/, '');
   }
   repo = repo.replace(/\.git$/, '');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}\/[a-zA-Z0-9_.-]{1,100}$/.test(repo) || ['.', '..'].includes(repo.split('/')[1])) {
-    throw new Error('Укажите GitHub-репозиторий в формате owner/Maxweb.');
+    throw new Error('Укажите GitHub-репозиторий в формате owner/Obla.');
   }
   return repo;
 }

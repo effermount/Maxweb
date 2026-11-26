@@ -28,7 +28,7 @@ client.ready.then(async () => {
   await wait(() => settings.executeJavaScript('document.getElementById("version").textContent.startsWith("Обла ")'), 'settings brand');
   assert.match(await settings.executeJavaScript('document.querySelector("header h1").textContent'), /^Обла/);
   await wait(() => settings.executeJavaScript('document.querySelector("header img").complete'), 'icon');
-  assert.equal(await settings.executeJavaScript('document.getElementById("repository").value'), 'effermount/Maxweb');
+  assert.equal(await settings.executeJavaScript('document.getElementById("repository").value'), require('../src/release-config.json').repository);
   await settings.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   fs.writeFileSync(path.join(qa, 'obla-settings-dark.png'), (await settings.capturePage()).toPNG());
   // Render the lock surface using a fixture state; no real biometric prompt or keychain access.

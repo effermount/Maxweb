@@ -1,7 +1,7 @@
 {
-  "name": "maxweb",
+  "name": "obla",
   "productName": "Обла",
-  "version": "1.2.17",
+  "version": "1.1.0",
   "description": "Обла — MAX, Telegram, WhatsApp и VK в одном приложении",
   "private": true,
   "main": "src/main.cjs",
@@ -117,5 +117,13 @@
       ]
     },
     "afterPack": "scripts/after-pack.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/effermount/Obla.git"
+  },
+  "homepage": "https://github.com/effermount/Obla",
+  "bugs": {
+    "url": "https://github.com/effermount/Obla/issues"
   }
 }

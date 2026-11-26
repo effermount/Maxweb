@@ -22,7 +22,7 @@ assert(!fs.existsSync(path.join(app, 'Contents')), 'Mac native components must n
 const installer = path.join(output, `Obla-${version}-windows-x64.exe`);
 assert.equal(fs.readFileSync(installer).toString('ascii', 0, 2), 'MZ');
 const manifest = JSON.parse(fs.readFileSync(path.join(output, 'latest-windows.json')));
-require('../src/update-core.cjs').verifyManifest(manifest, fs.readFileSync(path.join(root, 'assets/release-public.pem')), `https://github.com/effermount/Maxweb/releases/download/v${version}/latest-windows.json`, { platform: 'win32', arch: 'x64' });
+require('../src/update-core.cjs').verifyManifest(manifest, fs.readFileSync(path.join(root, 'assets/release-public.pem')), `https://github.com/${require('../src/release-config.json').repository}/releases/download/v${version}/latest-windows.json`, { platform: 'win32', arch: 'x64' });
 assert.equal(manifest.sha256, require('node:crypto').createHash('sha256').update(fs.readFileSync(installer)).digest('hex'));
 assert.equal(manifest.size, fs.statSync(installer).size);
 assert.equal(manifest.version, version);

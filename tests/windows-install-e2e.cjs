@@ -20,6 +20,9 @@ if (process.versions.electron) {
       clearTimeout(deadline); app.quit(); return;
     }
     await ses.cookies.set({ url: 'https://obla-fixture.invalid/', name: 'obla-update-fixture', value: 'retained', secure: true, expirationDate: Date.now() / 1000 + 3600 });
+    if (mode === 'seed') {
+      await ses.cookies.flushStore(); clearTimeout(deadline); app.quit(); return;
+    }
     const { WindowsUpdater } = require('../src/windows-updater.cjs');
     const updater = new WindowsUpdater({ version: '0.0.0', directory: path.join(profile, 'Updates'), publicKey: fs.readFileSync(path.join(__dirname, '../assets/release-public.pem')),
       arch: 'x64', packaged: true, executable: path.join(target, 'Obla.exe'), getSettings: () => ({}),
@@ -39,6 +42,17 @@ if (process.versions.electron) {
   const bytes = fs.readFileSync(installer);
   assert.equal(bytes.length, manifest.size);
   assert.equal(require('node:crypto').createHash('sha256').update(bytes).digest('hex'), manifest.sha256);
+  let firstInstaller = installer;
+  if (process.argv[3]) {
+    const previous = path.resolve(process.argv[3]);
+    const file = path.join(previous, 'latest-windows.json');
+    const legacy = require('../src/update-core.cjs').verifyManifest(JSON.parse(fs.readFileSync(file)), fs.readFileSync(path.join(__dirname, '../assets/release-public.pem')), pathToFileURL(file).href, { platform: 'win32', arch: 'x64', allowFile: true });
+    assert.equal(legacy.url, `Obla-${legacy.version}-windows-x64.exe`);
+    firstInstaller = path.join(previous, legacy.url);
+    const legacyBytes = fs.readFileSync(firstInstaller);
+    assert.equal(legacyBytes.length, legacy.size);
+    assert.equal(require('node:crypto').createHash('sha256').update(legacyBytes).digest('hex'), legacy.sha256);
+  }
   const profile = path.join(process.env.APPDATA, 'Обла');
   assert(!fs.existsSync(profile), 'Refuse to touch an existing user profile');
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'obla-native-update-')));
@@ -54,13 +68,24 @@ if (process.versions.electron) {
     return pids.length;
   }
   async function main() {
-    const first = spawnSync(installer, ['/S', `/D=${target}`], { stdio: 'inherit', timeout: 120000, windowsVerbatimArguments: true, argv0: `"${installer}"` });
+    const first = spawnSync(firstInstaller, ['/S', `/D=${target}`], { stdio: 'inherit', timeout: 120000, windowsVerbatimArguments: true, argv0: `"${firstInstaller}"` });
     assert.equal(first.status, 0, 'Initial NSIS installation failed');
     assert(fs.existsSync(executable));
     const store = require('../src/store.cjs').createStore(profile);
     store.set({ accounts: [{ id: 'default', name: 'Update fixture', customName: true }], theme: 'dark', maxZoom: 125,
       updates: { repository: 'effermount/Maxweb', autoCheck: false, userConfigured: true } });
     fs.writeFileSync(path.join(profile, 'keep-fixture'), 'retained');
+    if (firstInstaller !== installer) {
+      const seed = spawnSync(require('electron'), [__filename, 'seed', profile, target, source], { stdio: 'inherit', timeout: 45000 });
+      assert.equal(seed.status, 0);
+      const reset = spawnSync(installer, ['/S', `/D=${target}`], { stdio: 'inherit', timeout: 120000, windowsVerbatimArguments: true, argv0: `"${installer}"` });
+      assert.equal(reset.status, 0, 'Manual version reset installation failed');
+      const version = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-Item -LiteralPath '${executable.replaceAll("'", "''")}').VersionInfo.FileVersion`], { encoding: 'utf8' });
+      assert.equal(version.stdout.trim().split('.').slice(0, 3).join('.'), manifest.version);
+      const retained = spawnSync(require('electron'), [__filename, 'verify', profile, target, source], { stdio: 'inherit', timeout: 45000 });
+      assert.equal(retained.status, 0, 'Manual reset must retain the previous session');
+      console.log('PASS: previous release replaced by the reset version with its session retained');
+    }
     const worker = spawnSync(require('electron'), [__filename, 'update', profile, target, source], { stdio: 'inherit', timeout: 120000 });
     assert.equal(worker.status, 0, 'Updater worker failed');
     assert.equal(fs.readFileSync(path.join(profile, 'flushed'), 'utf8'), 'yes');

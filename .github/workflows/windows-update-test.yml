@@ -6,6 +6,10 @@ on:
         description: Release containing the signed Windows installer
         required: true
         type: string
+      previous_tag:
+        description: Optional previous release to verify manual replacement
+        required: false
+        type: string
 permissions:
   contents: read
 jobs:
@@ -28,9 +32,23 @@ jobs:
         shell: pwsh
         run: |
           gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern '*windows-x64.exe' --pattern 'latest-windows.json' --dir "$env:RUNNER_TEMP/obla-release"
+      - name: Download previous installer
+        if: inputs.previous_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
+        shell: pwsh
+        run: |
+          gh release download $env:PREVIOUS_TAG --repo $env:GITHUB_REPOSITORY --pattern '*windows-x64.exe' --pattern 'latest-windows.json' --dir "$env:RUNNER_TEMP/obla-previous"
       - name: Verify signed updater and native installer
+        env:
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
         shell: pwsh
         run: |
           node --test tests/windows.test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/windows-install-e2e.cjs "$env:RUNNER_TEMP/obla-release"
+          if ($env:PREVIOUS_TAG) {
+            node tests/windows-install-e2e.cjs "$env:RUNNER_TEMP/obla-release" "$env:RUNNER_TEMP/obla-previous"
+          } else {
+            node tests/windows-install-e2e.cjs "$env:RUNNER_TEMP/obla-release"
+          }

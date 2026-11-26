@@ -30,7 +30,7 @@ for (const file of ['src/brand.cjs', 'src/ui/shell.html', 'src/ui/settings.html'
 for (const language of ['ru', 'en']) assert.match(fs.readFileSync(path.join(contents, `Resources/${language}.lproj/InfoPlist.strings`), 'utf8'), /CFBundleDisplayName = "Обла"/);
 const modern = JSON.parse(fs.readFileSync(path.join(root, 'dist/latest-mac.json'))), legacy = JSON.parse(fs.readFileSync(path.join(root, 'dist/latest.json')));
 const key = fs.readFileSync(path.join(root, 'assets/release-public.pem'));
-const base = `https://github.com/effermount/Maxweb/releases/download/v${version}/`;
+const base = `https://github.com/${require('../src/release-config.json').repository}/releases/download/v${version}/`;
 for (const arch of ['arm64', 'x64']) verifyManifest(modern, key, base + 'latest-mac.json', { arch });
 verifyManifest(legacy, key, base + 'latest.json', { arch: 'arm64' });
 assert.equal(modern.arch, 'universal'); assert.equal(legacy.arch, 'arm64');

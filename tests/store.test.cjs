@@ -42,12 +42,12 @@ test('repository relocation migrates the old feed and retains update preferences
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maxweb-relocation-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'preferences.json');
-  for (const userConfigured of [false, true]) {
-    fs.writeFileSync(file, JSON.stringify({ updates: { repository: 'forkkrn-cmd/Maxweb', autoCheck: false, userConfigured } }));
+  for (const repository of ['forkkrn-cmd/Maxweb', 'effermount/Maxweb']) for (const userConfigured of [false, true]) {
+    fs.writeFileSync(file, JSON.stringify({ updates: { repository, autoCheck: false, userConfigured } }));
     const store = createStore(dir);
-    assert.deepEqual(store.get().updates, { repository: 'effermount/Maxweb', autoCheck: false, userConfigured });
+    assert.deepEqual(store.get().updates, { repository: 'effermount/Obla', autoCheck: false, userConfigured });
     store.set({ sidebarCollapsed: true });
-    assert.equal(createStore(dir).get().updates.repository, 'effermount/Maxweb');
+    assert.equal(createStore(dir).get().updates.repository, 'effermount/Obla');
   }
   fs.writeFileSync(file, JSON.stringify({ updates: { repository: 'custom/Maxweb', autoCheck: true, userConfigured: true } }));
   assert.equal(createStore(dir).get().updates.repository, 'custom/Maxweb');
