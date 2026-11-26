@@ -5,11 +5,7 @@
 <h1 align="center">Обла</h1>
 <p align="center"><strong>Четыре мессенджера. Одно спокойное пространство.</strong></p>
 <p align="center">MAX · Telegram · WhatsApp · VK</p>
-<p align="center">
-  <a href="https://github.com/effermount/Obla/releases/latest"><img alt="Последний выпуск" src="https://img.shields.io/github/v/release/effermount/Obla?style=flat-square&amp;color=8b5cf6&amp;label=версия"></a>
-  <img alt="macOS и Windows" src="https://img.shields.io/badge/macOS%20%2B%20Windows-8b5cf6?style=flat-square">
-  <a href="LICENSE"><img alt="Лицензия MIT" src="https://img.shields.io/badge/license-MIT-2dd4bf?style=flat-square"></a>
-</p>
+<p align="center">macOS · Windows · Открытый код · <a href="LICENSE">MIT</a></p>
 
 **Обла** объединяет официальные веб-версии MAX, Telegram, WhatsApp и VK в одном приложении для компьютера. Рабочие и личные аккаунты находятся рядом, а их авторизации хранятся отдельно.
 
