@@ -21,6 +21,7 @@ async function fixture(t, bytes = installer(), failSpawn = false) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const target = path.join(root, 'Обла with spaces'), directory = path.join(root, 'profile/Updates');
   fs.mkdirSync(target); fs.mkdirSync(directory, { recursive: true });
+  const canonicalTarget = await fs.promises.realpath(target);
   const account = path.join(root, 'profile/accounts'); fs.writeFileSync(account, 'retained fixture sessions');
   fs.writeFileSync(path.join(root, 'Obla-1.2.16-windows-x64.exe'), bytes);
   const source = pathToFileURL(path.join(root, 'latest-windows.json')).href;
@@ -32,7 +33,7 @@ async function fixture(t, bytes = installer(), failSpawn = false) {
     spawnInstaller: (file, args, config) => {
       spawned++; assert.equal(flushed, 1);
       assert.equal(file, path.join(directory, 'Obla-1.2.16-windows-x64.exe'));
-      assert.deepEqual(args, ['--updated', '/S', '--force-run', `/D=${fs.realpathSync(target)}`]);
+      assert.deepEqual(args, ['--updated', '/S', '--force-run', `/D=${canonicalTarget}`]);
       assert.equal(config.shell, false); assert.equal(config.detached, true); assert.equal(config.windowsVerbatimArguments, true);
       assert.equal(config.argv0, `"${file}"`);
       const child = new EventEmitter(); child.unref = () => { unref = true; };
